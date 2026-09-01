@@ -1,0 +1,415 @@
+// ---------------------------------------------------------------------------
+// Retail Clothing Shop - Transaction Recording System
+// ---------------------------------------------------------------------------
+// Design notes (see README "Business model" for the full explanation):
+//
+//  * Purchases are LUMP-SUM whole bills. There are deliberately no purchase
+//    line items, no product/item master and no stock tracking.
+//  * Sales may be SUMMARY (one amount for the day) or DETAILED (invoice lines).
+//    Sale items are free-text invoice lines, NOT inventory records.
+//  * Supplier liability is DERIVED from purchases + supplier payments.
+//    There is no stored "current balance" column anywhere.
+//  * Dates are stored as Gregorian (AD) `date` values so the database can sort,
+//    filter and range-query them. The Bikram Sambat (BS) representation the
+//    shopkeeper actually types is kept alongside as a `*_bs` string in
+//    `YYYY-MM-DD` form for display / printing.
+//  * Money is `numeric(14,2)`; quantities are `numeric(14,3)`. Never floats.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  USER
+
+  @@map("user_role")
+}
+
+/// Modes we can pay a supplier with.
+enum SupplierPaymentMode {
+  CASH
+  CHEQUE
+  BANK_TRANSFER
+  OTHER
+
+  @@map("supplier_payment_mode")
+}
+
+/// Modes a customer can settle a sale with. CREDIT means "not paid yet" and is
+/// intentionally absent from SupplierPaymentMode (an unpaid purchase is simply
+/// a purchase with no payment rows against it).
+enum SalePaymentMode {
+  CASH
+  BANK
+  CHEQUE
+  CREDIT
+  OTHER
+
+  @@map("sale_payment_mode")
+}
+
+/// Lifecycle of a payment instrument.
+///  ISSUED    - recorded but not yet realised (typically a future-dated cheque)
+///  CLEARED   - money has actually moved (normal state for cash)
+///  CANCELLED - cheque was cancelled / bounced / voided
+enum PaymentStatus {
+  ISSUED
+  CLEARED
+  CANCELLED
+
+  @@map("payment_status")
+}
+
+enum SaleType {
+  SUMMARY
+  DETAILED
+
+  @@map("sale_type")
+}
+
+/// Owner of an attachment. Kept as an enum instead of a real foreign key
+/// because attachments are polymorphic; existence of `entity_id` is validated
+/// in the service layer.
+enum AttachmentEntityType {
+  PURCHASE
+  SUPPLIER_PAYMENT
+  SALE
+
+  @@map("attachment_entity_type")
+}
+
+enum DocumentType {
+  PURCHASE_BILL
+  SUPPLIER_PAYMENT_RECEIPT
+  CHEQUE_COPY
+  SALE_INVOICE
+  OTHER
+
+  @@map("document_type")
+}
+
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar(120)
+  email        String   @unique @db.VarChar(180)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         UserRole @default(USER)
+  isActive     Boolean  @default(true) @map("is_active")
+
+  /// Shop identity - the name, address, phone and PAN that GET /auth/me
+  /// returns and that reports are printed under. It sits on the user rather
+  /// than in configuration so the shopkeeper can correct it from the app
+  /// without a redeploy. Nullable throughout: an account created before
+  /// anyone filled the form in is a normal state, not missing data.
+  shopName    String? @map("shop_name") @db.VarChar(180)
+  shopAddress String? @map("shop_address") @db.VarChar(255)
+  shopPhone   String? @map("shop_phone") @db.VarChar(30)
+  shopPan     String? @map("shop_pan") @db.VarChar(30)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  purchases        Purchase[]
+  supplierPayments SupplierPayment[]
+  sales            Sale[]
+  attachments      Attachment[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Fiscal years (Nepali BS, e.g. "2082/83")
+// ---------------------------------------------------------------------------
+
+model FiscalYear {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique @db.VarChar(20)
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
+  startDateBs String?  @map("start_date_bs") @db.VarChar(10)
+  endDateBs   String?  @map("end_date_bs") @db.VarChar(10)
+  isActive    Boolean  @default(false) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  purchases        Purchase[]
+  supplierPayments SupplierPayment[]
+  sales            Sale[]
+
+  @@index([isActive])
+  @@map("fiscal_years")
+}
+
+// ---------------------------------------------------------------------------
+// Suppliers (wholesale vendors)
+// ---------------------------------------------------------------------------
+
+model Supplier {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(180)
+  contactPerson String? @map("contact_person") @db.VarChar(120)
+  phone         String? @db.VarChar(30)
+  email         String? @db.VarChar(180)
+  address       String? @db.VarChar(255)
+  pan           String? @db.VarChar(30)
+
+  /// Balance carried into the system on the day it went live. It is an input
+  /// to the derived outstanding calculation, never a running total.
+  openingBalance Decimal @default(0) @map("opening_balance") @db.Decimal(14, 2)
+
+  isActive  Boolean  @default(true) @map("is_active")
+  remarks   String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  purchases Purchase[]
+  payments  SupplierPayment[]
+
+  @@index([name])
+  @@index([isActive])
+  @@map("suppliers")
+}
+
+// ---------------------------------------------------------------------------
+// Customers (optional - walk-in sales carry no customer)
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(180)
+  phone     String?  @db.VarChar(30)
+  address   String?  @db.VarChar(255)
+  pan       String?  @db.VarChar(30)
+  remarks   String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sales Sale[]
+
+  @@index([name])
+  @@index([phone])
+  @@map("customers")
+}
+
+// ---------------------------------------------------------------------------
+// Purchases - always a lump-sum whole bill, never line items
+// ---------------------------------------------------------------------------
+
+model Purchase {
+  id           String   @id @default(uuid()) @db.Uuid
+  fiscalYearId String   @map("fiscal_year_id") @db.Uuid
+  supplierId   String   @map("supplier_id") @db.Uuid
+  billNo       String   @map("bill_no") @db.VarChar(60)
+  billDate     DateTime @map("bill_date") @db.Date
+  billDateBs   String?  @map("bill_date_bs") @db.VarChar(10)
+  description  String?
+  amount       Decimal  @db.Decimal(14, 2)
+  remarks      String?
+  createdById  String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  fiscalYear FiscalYear        @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  supplier   Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy  User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  payments   SupplierPayment[]
+
+  /// Bill numbers are only unique per supplier per fiscal year - two different
+  /// suppliers may legitimately both issue a bill "4521".
+  @@unique([supplierId, fiscalYearId, billNo], map: "purchases_supplier_fy_bill_no_key")
+  @@index([supplierId])
+  @@index([billDate])
+  @@index([fiscalYearId])
+  @@index([createdById])
+  @@map("purchases")
+}
+
+// ---------------------------------------------------------------------------
+// Supplier payments - stored separately from purchases so that partial,
+// credit, cash+cheque and future-dated-cheque settlements are all expressible.
+// ---------------------------------------------------------------------------
+
+model SupplierPayment {
+  id           String @id @default(uuid()) @db.Uuid
+  fiscalYearId String @map("fiscal_year_id") @db.Uuid
+  supplierId   String @map("supplier_id") @db.Uuid
+
+  /// Optional. A payment may settle one specific bill, several older bills, or
+  /// just the supplier's general outstanding balance. Allocation across bills
+  /// is a later concern.
+  purchaseId String? @map("purchase_id") @db.Uuid
+
+  voucherNo     String?             @map("voucher_no") @db.VarChar(60)
+  /// Date the payment was made / the cheque was handed over.
+  paymentDate   DateTime            @map("payment_date") @db.Date
+  paymentDateBs String?             @map("payment_date_bs") @db.VarChar(10)
+  paymentMode   SupplierPaymentMode @map("payment_mode")
+  amount        Decimal             @db.Decimal(14, 2)
+
+  /// Cheque details. Present only when paymentMode = CHEQUE.
+  chequeNo     String?   @map("cheque_no") @db.VarChar(60)
+  chequeDate   DateTime? @map("cheque_date") @db.Date
+  chequeDateBs String?   @map("cheque_date_bs") @db.VarChar(10)
+  /// Bank / wallet reference for BANK_TRANSFER and similar modes.
+  referenceNo  String?   @map("reference_no") @db.VarChar(100)
+
+  /// NULL while status = ISSUED. Set when the money actually leaves the bank.
+  clearedDate DateTime?     @map("cleared_date") @db.Date
+  status      PaymentStatus @default(CLEARED)
+
+  description String?
+  remarks     String?
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  fiscalYear FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  supplier   Supplier   @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchase   Purchase?  @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  createdBy  User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([fiscalYearId, voucherNo], map: "supplier_payments_fy_voucher_no_key")
+  @@index([supplierId])
+  @@index([paymentDate])
+  @@index([status])
+  @@index([chequeDate])
+  @@index([purchaseId])
+  @@index([fiscalYearId])
+  @@index([createdById])
+  @@map("supplier_payments")
+}
+
+// ---------------------------------------------------------------------------
+// Sales
+// ---------------------------------------------------------------------------
+
+model Sale {
+  id           String   @id @default(uuid()) @db.Uuid
+  fiscalYearId String   @map("fiscal_year_id") @db.Uuid
+  /// NULL is allowed for SUMMARY sales (no invoice was handed to anyone).
+  invoiceNo    String?  @map("invoice_no") @db.VarChar(60)
+  saleDate     DateTime @map("sale_date") @db.Date
+  saleDateBs   String?  @map("sale_date_bs") @db.VarChar(10)
+  customerId   String?  @map("customer_id") @db.Uuid
+  saleType     SaleType @map("sale_type")
+  description  String?
+
+  /// Server-calculated. For DETAILED sales these are derived from sale items;
+  /// values sent by a client are never trusted.
+  subtotal    Decimal @default(0) @db.Decimal(14, 2)
+  discount    Decimal @default(0) @db.Decimal(14, 2)
+  totalAmount Decimal @map("total_amount") @db.Decimal(14, 2)
+
+  remarks     String?
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  fiscalYear FiscalYear    @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  customer   Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  createdBy  User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  items      SaleItem[]
+  payments   SalePayment[]
+
+  /// Invoice numbers are unique within a fiscal year. Multiple NULLs are
+  /// allowed by Postgres, which is exactly what SUMMARY sales need.
+  @@unique([fiscalYearId, invoiceNo], map: "sales_fy_invoice_no_key")
+  @@index([saleDate])
+  @@index([fiscalYearId])
+  @@index([customerId])
+  @@index([saleType])
+  @@index([createdById])
+  @@map("sales")
+}
+
+// ---------------------------------------------------------------------------
+// Sale items - free-text invoice lines. NOT an item master, NOT inventory.
+// ---------------------------------------------------------------------------
+
+model SaleItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  saleId      String   @map("sale_id") @db.Uuid
+  description String   @db.VarChar(255)
+  quantity    Decimal  @db.Decimal(14, 3)
+  unit        String   @db.VarChar(20)
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(14, 2)
+  discount    Decimal  @default(0) @db.Decimal(14, 2)
+  /// Always recomputed server-side as quantity * unitPrice - discount.
+  amount      Decimal  @db.Decimal(14, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@map("sale_items")
+}
+
+// ---------------------------------------------------------------------------
+// Sale payments - lets one sale be settled with a mix of cash / bank / credit
+// ---------------------------------------------------------------------------
+
+model SalePayment {
+  id          String          @id @default(uuid()) @db.Uuid
+  saleId      String          @map("sale_id") @db.Uuid
+  paymentMode SalePaymentMode @map("payment_mode")
+  amount      Decimal         @db.Decimal(14, 2)
+  referenceNo String?         @map("reference_no") @db.VarChar(100)
+  chequeNo    String?         @map("cheque_no") @db.VarChar(60)
+  chequeDate  DateTime?       @map("cheque_date") @db.Date
+  clearedDate DateTime?       @map("cleared_date") @db.Date
+  status      PaymentStatus   @default(CLEARED)
+  remarks     String?
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([status])
+  @@map("sale_payments")
+}
+
+// ---------------------------------------------------------------------------
+// Attachments - one reusable table for every kind of scanned evidence.
+// The binary never lands in Postgres; only the storage key does.
+// ---------------------------------------------------------------------------
+
+model Attachment {
+  id           String               @id @default(uuid()) @db.Uuid
+  entityType   AttachmentEntityType @map("entity_type")
+  entityId     String               @map("entity_id") @db.Uuid
+  documentType DocumentType         @map("document_type")
+
+  originalFileName String @map("original_file_name") @db.VarChar(255)
+  /// Driver-relative key (local path fragment, S3 object key, Cloudinary id).
+  storageKey       String @map("storage_key") @db.VarChar(500)
+  /// Which driver wrote the file, so old rows still resolve after a switch.
+  storageDriver    String @default("local") @map("storage_driver") @db.VarChar(30)
+  mimeType         String @map("mime_type") @db.VarChar(150)
+  /// Bytes.
+  fileSize         Int    @map("file_size")
+
+  uploadedById String?  @map("uploaded_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([documentType])
+  @@index([uploadedById])
+  @@map("attachments")
+}
