@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "checkJs": false,
+    "allowJs": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "maxNodeModuleJsDepth": 2
+  },
+  "include": ["src/**/*.js"],
+  "exclude": ["node_modules", "src/database/generated"]
+}
