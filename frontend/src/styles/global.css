@@ -1,0 +1,257 @@
+@import 'tailwindcss';
+
+/* Dark mode is driven by `data-theme` on <html> rather than a class, because the
+   app offers light / dark / follow-the-phone and needs an explicit value. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ---------------------------------------------------------------------------
+   Raw palette
+   Every semantic colour is a plain custom property here and is re-declared for
+   dark mode below. The @theme block maps them into Tailwind utilities, so
+   `bg-surface` follows the theme with no `dark:` class anywhere in the markup.
+   --------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light dark;
+
+  --brand-50: #eef2ff;
+  --brand-100: #e0e7ff;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;
+
+  /* Money has a direction: in is sales, out is what the shop spends or owes. */
+  --in: #059669;
+  --in-soft: #d1fae5;
+  --out: #e11d48;
+  --out-soft: #ffe4e6;
+  --pending: #d97706;
+  --pending-soft: #fef3c7;
+  --info: #0284c7;
+  --info-soft: #e0f2fe;
+  --muted-soft: #eef1f6;
+
+  --bg: #f4f5f9;
+  --surface: #ffffff;
+  --sunken: #eceef4;
+
+  --ink: #101426;
+  --ink-muted: #5b647b;
+  --ink-subtle: #8992a6;
+
+  --line: #e3e6ee;
+  --line-strong: #ced3e0;
+
+  --header-h: 56px;
+  --nav-h: 62px;
+}
+
+:root[data-theme='dark'] {
+  --brand-50: #1e1b4b;
+  --brand-100: #272263;
+  --brand-500: #818cf8;
+  --brand-600: #6366f1;
+  --brand-700: #4f46e5;
+
+  --in: #34d399;
+  --in-soft: #06301f;
+  --out: #fb7185;
+  --out-soft: #3d0d1a;
+  --pending: #fbbf24;
+  --pending-soft: #3a2506;
+  --info: #38bdf8;
+  --info-soft: #06283d;
+  --muted-soft: #1d2439;
+
+  --bg: #0b0f1c;
+  --surface: #141a2c;
+  --sunken: #0f1424;
+
+  --ink: #eef1f8;
+  --ink-muted: #a4adc4;
+  --ink-subtle: #6f7a93;
+
+  --line: #232c44;
+  --line-strong: #33405e;
+}
+
+/* ---------------------------------------------------------------------------
+   Design tokens as Tailwind utilities
+   --------------------------------------------------------------------------- */
+
+@theme {
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-500: var(--brand-500);
+  --color-brand: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+
+  --color-in: var(--in);
+  --color-in-soft: var(--in-soft);
+  --color-out: var(--out);
+  --color-out-soft: var(--out-soft);
+  --color-pending: var(--pending);
+  --color-pending-soft: var(--pending-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-muted-soft: var(--muted-soft);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  /* Roomier than Tailwind's defaults: a phone UI reads better with soft corners. */
+  --radius-card: 1.375rem;
+  --radius-tile: 1rem;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgb(16 20 38 / 0.05);
+  --shadow-lift: 0 4px 16px -4px rgb(16 20 38 / 0.1), 0 2px 4px -2px rgb(16 20 38 / 0.05);
+  --shadow-sheet: 0 16px 40px -12px rgb(16 20 38 / 0.22);
+  --shadow-fab: 0 8px 24px -6px rgb(79 70 229 / 0.5);
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans Devanagari', sans-serif;
+
+  --ease-out-quart: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  --animate-rise-in: rise-in 220ms var(--ease-out-quart);
+  --animate-fade-in: fade-in 220ms var(--ease-out-quart);
+  --animate-sheet-up: sheet-up 320ms var(--ease-out-quart);
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+/* Dark shadows need more opacity to read at all against a dark surface. */
+:root[data-theme='dark'] {
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-lift: 0 4px 16px -4px rgb(0 0 0 / 0.5);
+  --shadow-sheet: 0 16px 40px -12px rgb(0 0 0 / 0.7);
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+   --------------------------------------------------------------------------- */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-bg text-ink font-sans text-[15px] antialiased;
+    /* The app owns scrolling inside the phone viewport; the page never
+       rubber-bands behind it. */
+    overscroll-behavior-y: none;
+  }
+
+  button {
+    /* Kills the tap-highlight flash on mobile Safari and Chrome. */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  a {
+    -webkit-tap-highlight-color: transparent;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :focus-visible {
+    @apply outline-brand-500 rounded-lg outline-2 outline-offset-2;
+  }
+
+  /* Respect the OS "reduce motion" setting in one place. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The few patterns that are not worth repeating inline
+   --------------------------------------------------------------------------- */
+
+@utility scroll-area {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Safe-area insets, so the chrome clears a notch and a home indicator. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility h-nav {
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+}
+
+@utility bottom-above-nav {
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 1rem);
+}
+
+/* Section label: uppercase, tracked out, deliberately quiet. */
+@utility label-section {
+  @apply text-ink-subtle text-[11.5px] font-bold tracking-[0.06em] uppercase;
+}
