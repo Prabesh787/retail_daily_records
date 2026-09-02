@@ -1,0 +1,180 @@
+import 'package:sqflite/sqflite.dart';
+
+import '../../../core/constants/db_constants.dart';
+import '../../../core/domain/money.dart';
+import '../../enums/payment_status.dart';
+import '../../models/supplier.dart';
+
+class SupplierDao {
+  const SupplierDao(this._db);
+
+  final Database _db;
+
+  // Interpolated from the enum rather than written as literals, so a renamed
+  // value is a compile error instead of a query that silently counts nothing.
+  static final String _cleared = PaymentStatus.cleared.value;
+  static final String _issued = PaymentStatus.issued.value;
+  static final String _cancelled = PaymentStatus.cancelled.value;
+
+  /// The one calculation this whole system is built around.
+  ///
+  ///     outstanding = opening balance + purchases − payments that are not cancelled
+  ///
+  /// Derived every time it is asked for, never stored, which is why there is no
+  /// `current_balance` column here or on the server. A stored total can drift
+  /// away from the rows that produced it; this cannot.
+  ///
+  /// A cheque handed over but not yet debited counts as paid — the shop has
+  /// parted with it — while still being reported separately as
+  /// `uncleared_total`, because that money has not actually left the bank.
+  /// Cancelled payments are excluded outright: a bounced cheque settled nothing.
+  ///
+  /// Two grouped subqueries rather than correlated ones, so listing every
+  /// supplier costs the same as listing one. Mirrors
+  /// `backend/src/modules/suppliers/supplier-balance.js`.
+  static String get _withBalance => '''
+    SELECT s.*,
+      COALESCE(pur.total, 0)      AS purchase_total,
+      COALESCE(pur.cnt, 0)        AS bill_count,
+      COALESCE(pay.cleared, 0)    AS cleared_total,
+      COALESCE(pay.uncleared, 0)  AS uncleared_total,
+      COALESCE(pay.cnt, 0)        AS payment_count,
+      s.opening_balance
+        + COALESCE(pur.total, 0)
+        - COALESCE(pay.cleared, 0)
+        - COALESCE(pay.uncleared, 0) AS outstanding
+    FROM ${DbTables.supplier} s
+    LEFT JOIN (
+      SELECT supplier_id, SUM(amount) AS total, COUNT(*) AS cnt
+      FROM ${DbTables.purchase}
+      WHERE is_deleted = 0
+      GROUP BY supplier_id
+    ) pur ON pur.supplier_id = s.id
+    LEFT JOIN (
+      SELECT supplier_id,
+        SUM(CASE WHEN status = '$_cleared' THEN amount ELSE 0 END) AS cleared,
+        SUM(CASE WHEN status = '$_issued'  THEN amount ELSE 0 END) AS uncleared,
+        COUNT(*) AS cnt
+      FROM ${DbTables.supplierPayment}
+      WHERE is_deleted = 0 AND status <> '$_cancelled'
+      GROUP BY supplier_id
+    ) pay ON pay.supplier_id = s.id
+  ''';
+
+  Future<List<Supplier>> all({
+    String? search,
+    bool onlyWithBalance = false,
+    bool includeInactive = true,
+    int? limit,
+  }) async {
+    final where = <String>['s.is_deleted = 0'];
+    final args = <Object?>[];
+
+    if (!includeInactive) where.add('s.is_active = 1');
+    if (search != null && search.trim().isNotEmpty) {
+      where.add('(s.name LIKE ? OR s.phone LIKE ? OR s.contact_person LIKE ?)');
+      final term = '%${search.trim()}%';
+      args..add(term)..add(term)..add(term);
+    }
+
+    final rows = await _db.rawQuery('''
+      SELECT * FROM ($_withBalance WHERE ${where.join(' AND ')})
+      ${onlyWithBalance ? 'WHERE outstanding <> 0' : ''}
+      ORDER BY outstanding DESC, name COLLATE NOCASE ASC
+      ${limit == null ? '' : 'LIMIT $limit'}
+    ''', args);
+
+    return rows.map(Supplier.fromMap).toList();
+  }
+
+  Future<Supplier?> byId(String id) async {
+    final rows = await _db.rawQuery(
+      '$_withBalance WHERE s.id = ? AND s.is_deleted = 0 LIMIT 1',
+      [id],
+    );
+    return rows.isEmpty ? null : Supplier.fromMap(rows.first);
+  }
+
+  /// Suppliers ranked by what is owed — the dashboard's "owed the most".
+  Future<List<Supplier>> topOutstanding({int limit = 4}) async {
+    final rows = await _db.rawQuery('''
+      SELECT * FROM ($_withBalance WHERE s.is_deleted = 0)
+      WHERE outstanding > 0
+      ORDER BY outstanding DESC
+      LIMIT $limit
+    ''');
+    return rows.map(Supplier.fromMap).toList();
+  }
+
+  /// Total payable across every supplier, and how many are actually owed
+  /// anything — the two numbers on the dashboard's payable tile.
+  Future<({Money total, int supplierCount})> payable() async {
+    final row = (await _db.rawQuery('''
+      SELECT
+        COALESCE(SUM(CASE WHEN outstanding > 0 THEN outstanding ELSE 0 END), 0) AS total,
+        COALESCE(SUM(CASE WHEN outstanding > 0 THEN 1 ELSE 0 END), 0) AS cnt
+      FROM ($_withBalance WHERE s.is_deleted = 0)
+    '''))
+        .first;
+
+    return (
+      total: Money.fromColumn(row['total']),
+      supplierCount: (row['cnt'] as int?) ?? 0,
+    );
+  }
+
+  Future<int> count() async {
+    final result = await _db.rawQuery(
+      'SELECT COUNT(*) AS c FROM ${DbTables.supplier} WHERE is_deleted = 0',
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<bool> nameExists(String name, {String? exceptId}) async {
+    final rows = await _db.query(
+      DbTables.supplier,
+      columns: ['id'],
+      where: 'name = ? COLLATE NOCASE AND is_deleted = 0'
+          '${exceptId == null ? '' : ' AND id <> ?'}',
+      whereArgs: [name.trim(), ?exceptId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  /// Write methods take the executor so the repository can wrap the row write
+  /// and its outbox entry in one transaction.
+  Future<void> upsert(DatabaseExecutor txn, Supplier supplier) async {
+    await txn.insert(
+      DbTables.supplier,
+      supplier.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> softDelete(DatabaseExecutor txn, String id, int updatedAt) async {
+    await txn.update(
+      DbTables.supplier,
+      {
+        SyncColumns.isDeleted: 1,
+        SyncColumns.updatedAt: updatedAt,
+        SyncColumns.syncStatus: 0,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// True when the supplier has any document against them. Nothing with history
+  /// is deleted — the UI deactivates instead.
+  Future<bool> hasTransactions(String id) async {
+    final result = await _db.rawQuery('''
+      SELECT
+        (SELECT COUNT(*) FROM ${DbTables.purchase}
+           WHERE supplier_id = ? AND is_deleted = 0) +
+        (SELECT COUNT(*) FROM ${DbTables.supplierPayment}
+           WHERE supplier_id = ? AND is_deleted = 0) AS c
+    ''', [id, id]);
+    return (Sqflite.firstIntValue(result) ?? 0) > 0;
+  }
+}
