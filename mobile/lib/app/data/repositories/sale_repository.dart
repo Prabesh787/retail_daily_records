@@ -2,11 +2,14 @@ import '../../core/constants/db_constants.dart';
 import '../../core/domain/money.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/utils/nepali_date.dart';
+import '../enums/sale_payment_mode.dart';
 import '../enums/sale_type.dart';
 import '../enums/sync_status.dart';
+import '../models/purchase.dart';
 import '../models/sale.dart';
 import '../models/sale_item.dart';
 import '../models/sale_payment.dart';
+import '../models/supplier_payment.dart';
 import '../providers/local/sale_dao.dart';
 import 'base_repository.dart';
 
@@ -39,6 +42,31 @@ class SaleRepository extends BaseRepository {
       dbService.sales.byDay(fromMs: fromMs, toMs: toMs, limit: limit);
 
   Future<SalesDay> dayBook(int dateMs) => dbService.sales.dayBook(dateMs);
+
+  /// Everything that happened on one day: what was sold, how it was settled,
+  /// and the money that went the other way.
+  ///
+  /// The day screen asks a question no single table answers — a shop's day is
+  /// its takings *and* the bills it took on *and* the suppliers it paid — so
+  /// the three reads are assembled here rather than in the screen. Doing it in
+  /// the controller would put a join in the widget layer and leave the figures
+  /// one refactor away from disagreeing with the lists beneath them.
+  Future<DayBook> dayBookFull(int dateMs) async {
+    final day = await dbService.sales.dayBook(dateMs);
+
+    // Both are day-bounded on their own date columns: a bill dated today and a
+    // payment dated today, regardless of when either was keyed in.
+    final purchases = await dbService.purchases.all(
+      fromMs: dateMs,
+      toMs: dateMs,
+    );
+    final payments = await dbService.supplierPayments.all(
+      fromMs: dateMs,
+      toMs: dateMs,
+    );
+
+    return DayBook(day: day, purchases: purchases, payments: payments);
+  }
 
   Future<({Money total, int count})> totalBetween(int fromMs, int toMs) =>
       dbService.sales.totalBetween(fromMs, toMs);
@@ -180,5 +208,79 @@ class SaleRepository extends BaseRepository {
         updatedAt: timestamp,
       );
     });
+  }
+}
+
+/// One day of trading, from both sides of the counter.
+///
+/// The takings figure and the split beneath it are computed here from the
+/// sales themselves, because there is no "day's takings" record anywhere in
+/// this system by design — the day is the sum of what is under it, and a
+/// stored total would be one more thing that can drift.
+class DayBook {
+  DayBook({
+    required this.day,
+    required this.purchases,
+    required this.payments,
+  });
+
+  final SalesDay day;
+
+  /// Bills dated this day, and supplier payments dated this day. Money going
+  /// out, which is the half a sales-only screen would leave the shopkeeper to
+  /// work out for themselves.
+  final List<Purchase> purchases;
+  final List<SupplierPayment> payments;
+
+  int get dateMs => day.dateMs;
+  String? get dateBs => day.dateBs;
+  List<Sale> get sales => day.sales;
+
+  bool get isEmpty => sales.isEmpty && purchases.isEmpty && payments.isEmpty;
+
+  /// What was sold. Includes credit — this is turnover, not cash.
+  Money get salesTotal => day.total;
+  int get saleCount => day.count;
+
+  /// What was actually taken. Credit lines and cancelled instruments are worth
+  /// nothing today, which is the whole reason this is a separate figure from
+  /// [salesTotal]: a shop whose till has to match the day book needs the one
+  /// that excludes promises.
+  Money get received =>
+      Money.sum(sales.map((sale) => sale.settledTotal));
+
+  /// Sold but not yet paid for — the gap between the two figures above.
+  Money get onCredit => salesTotal - received;
+
+  Money get purchaseTotal => Money.sum(purchases.map((p) => p.amount));
+
+  Money get paymentTotal =>
+      Money.sum(payments.map((p) => p.recognisedAmount));
+
+  /// Takings split by how each was settled, largest first.
+  ///
+  /// Built from the payment lines rather than from the sale headers, because a
+  /// single sale can be settled two ways — half cash, half on account — and a
+  /// header-level split would have to pick one and be wrong about the other.
+  List<({SalePaymentMode mode, Money amount})> get byMode {
+    final totals = <SalePaymentMode, Money>{};
+
+    for (final sale in sales) {
+      for (final payment in sale.payments) {
+        // Cancelled instruments are excluded: a bounced cheque was never
+        // takings, and leaving it in makes the split disagree with [received].
+        if (!payment.status.reducesLiability) continue;
+
+        totals[payment.paymentMode] =
+            (totals[payment.paymentMode] ?? Money.zero) + payment.amount;
+      }
+    }
+
+    final rows = [
+      for (final entry in totals.entries)
+        (mode: entry.key, amount: entry.value),
+    ]..sort((a, b) => b.amount.compareTo(a.amount));
+
+    return rows;
   }
 }

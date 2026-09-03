@@ -42,8 +42,15 @@ class PurchaseFormView extends GetView<PurchaseFormController> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Obx(
-                    () => _SupplierField(
-                      supplier: controller.supplier.value,
+                    () => PartyField(
+                      label: 'Supplier',
+                      icon: Icons.storefront_outlined,
+                      placeholder: 'Select a supplier',
+                      title: controller.supplier.value?.name,
+                      // What is already owed, so the bill about to be entered
+                      // has context rather than landing in a vacuum.
+                      subtitle: _supplierNote(controller.supplier.value),
+                      avatarName: controller.supplier.value?.name,
                       error: controller.supplierError.value,
                       onTap: () => _pickSupplier(context),
                     ),
@@ -129,6 +136,15 @@ class PurchaseFormView extends GetView<PurchaseFormController> {
     );
   }
 
+  String? _supplierNote(Supplier? supplier) {
+    final balance = supplier?.balance;
+    if (balance == null) return null;
+
+    return balance.outstanding.isPositive
+        ? 'Currently owed ${balance.outstanding.display(decimals: false)}'
+        : 'Settled up';
+  }
+
   Future<void> _pickSupplier(BuildContext context) async {
     final picked = await showPickerSheet<Supplier>(
       context: context,
@@ -142,123 +158,5 @@ class PurchaseFormView extends GetView<PurchaseFormController> {
     );
 
     if (picked != null) controller.setSupplier(picked);
-  }
-}
-
-/// The supplier slot.
-///
-/// Not a form field, so it carries its own error line rather than borrowing a
-/// `TextFormField`'s — and it shows what is owed once chosen, which is the
-/// context that decides whether this bill is a surprise.
-class _SupplierField extends StatelessWidget {
-  const _SupplierField({
-    required this.supplier,
-    required this.error,
-    required this.onTap,
-  });
-
-  final Supplier? supplier;
-  final String? error;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final invalid = error != null;
-    final chosen = supplier;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Supplier',
-          style: AppTextStyles.caption.copyWith(color: palette.inkMuted),
-        ),
-        AppSizes.gapXs,
-        Material(
-          color: palette.sunken,
-          borderRadius: BorderRadius.circular(AppSizes.radius),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: Container(
-              constraints: const BoxConstraints(minHeight: AppSizes.control),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSizes.md,
-                vertical: AppSizes.sm,
-              ),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: invalid ? palette.moneyOut : palette.line,
-                  width: invalid ? 1.6 : 1,
-                ),
-                borderRadius: BorderRadius.circular(AppSizes.radius),
-              ),
-              child: Row(
-                children: [
-                  if (chosen != null)
-                    AppAvatar(name: chosen.name, size: 34)
-                  else
-                    Icon(
-                      Icons.storefront_outlined,
-                      size: 20,
-                      color: palette.inkSubtle,
-                    ),
-                  AppSizes.gapMd,
-                  Expanded(
-                    child: chosen == null
-                        ? Text(
-                            'Select a supplier',
-                            style: AppTextStyles.body.copyWith(
-                              color: palette.inkSubtle,
-                            ),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                chosen.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.bodyStrong.copyWith(
-                                  color: palette.ink,
-                                ),
-                              ),
-                              if (chosen.balance case final balance?)
-                                Text(
-                                  balance.outstanding.isPositive
-                                      ? 'Currently owed '
-                                            '${balance.outstanding.display(decimals: false)}'
-                                      : 'Settled up',
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: balance.outstanding.isPositive
-                                        ? palette.moneyOut
-                                        : palette.inkSubtle,
-                                  ),
-                                ),
-                            ],
-                          ),
-                  ),
-                  Icon(
-                    Icons.expand_more_rounded,
-                    size: 20,
-                    color: palette.inkSubtle,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (invalid)
-          Padding(
-            padding: const EdgeInsets.only(top: 6, left: AppSizes.xs),
-            child: Text(
-              error!,
-              style: AppTextStyles.caption.copyWith(color: palette.moneyOut),
-            ),
-          ),
-      ],
-    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 
 import '../../purchases/controllers/purchases_controller.dart';
+import '../../sales/controllers/sales_controller.dart';
 import '../../suppliers/controllers/suppliers_controller.dart';
 import '../controllers/home_controller.dart';
 
@@ -16,5 +17,6 @@ class HomeBinding extends Bindings {
     Get.lazyPut<HomeController>(HomeController.new);
     Get.lazyPut<SuppliersController>(SuppliersController.new, fenix: true);
     Get.lazyPut<PurchasesController>(PurchasesController.new, fenix: true);
+    Get.lazyPut<SalesController>(SalesController.new, fenix: true);
   }
 }

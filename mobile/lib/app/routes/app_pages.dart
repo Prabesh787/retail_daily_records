@@ -4,9 +4,17 @@ import '../modules/auth/bindings/auth_binding.dart';
 import '../modules/auth/views/login_view.dart';
 import '../modules/home/bindings/home_binding.dart';
 import '../modules/home/views/home_view.dart';
+import '../modules/payments/bindings/payments_binding.dart';
+import '../modules/payments/views/cheque_register_view.dart';
+import '../modules/payments/views/payment_detail_view.dart';
+import '../modules/payments/views/payment_form_view.dart';
 import '../modules/purchases/bindings/purchases_binding.dart';
 import '../modules/purchases/views/purchase_detail_view.dart';
 import '../modules/purchases/views/purchase_form_view.dart';
+import '../modules/sales/bindings/sales_binding.dart';
+import '../modules/sales/views/sale_day_view.dart';
+import '../modules/sales/views/sale_detail_view.dart';
+import '../modules/sales/views/sale_form_view.dart';
 import '../modules/splash/bindings/splash_binding.dart';
 import '../modules/splash/views/splash_view.dart';
 import '../modules/suppliers/bindings/suppliers_binding.dart';
@@ -87,6 +95,48 @@ class AppPages {
       name: Routes.purchaseDetail,
       page: () => const PurchaseDetailView(),
       binding: PurchaseDetailBinding(),
+      middlewares: _protected,
+    ),
+
+    // Payments. All pushed — payments have no tab of their own, being reached
+    // from a supplier, a bill, or the cheque register.
+    GetPage(
+      name: Routes.paymentForm,
+      page: () => const PaymentFormView(),
+      binding: PaymentFormBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.paymentDetail,
+      page: () => const PaymentDetailView(),
+      binding: PaymentDetailBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.cheques,
+      page: () => const ChequeRegisterView(),
+      binding: ChequeRegisterBinding(),
+      middlewares: _protected,
+    ),
+
+    // Sales. The day book is reachable without arguments — it defaults to
+    // today, which makes `/sales/day` a usable deep link on its own.
+    GetPage(
+      name: Routes.saleForm,
+      page: () => const SaleFormView(),
+      binding: SaleFormBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.saleDetail,
+      page: () => const SaleDetailView(),
+      binding: SaleDetailBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.saleDay,
+      page: () => const SaleDayView(),
+      binding: SaleDayBinding(),
       middlewares: _protected,
     ),
   ];

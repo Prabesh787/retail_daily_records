@@ -78,7 +78,10 @@ class PurchasesView extends GetView<PurchasesController> {
                       : controller.createBill,
                 )
               else ...[
-                _Summary(controller: controller),
+                _Summary(
+                  controller: controller,
+                  onlyUnpaid: controller.onlyUnpaid.value,
+                ),
                 AppSizes.gapMd,
                 for (final group in controller.groups) ...[
                   AppCard.flush(
@@ -111,10 +114,21 @@ class PurchasesView extends GetView<PurchasesController> {
 
 /// What the list adds up to, so the figure is not left to be inferred from
 /// scrolling every day group.
+///
+/// Takes what it needs as plain values rather than reading observables itself.
+///
+/// This build runs outside the caller's `Obx` closure, so a `.value` read here
+/// would not be tracked — it happens to work only because the caller reads the
+/// same flag and rebuilds this widget with it. Passing it in makes that
+/// dependency real instead of incidental.
 class _Summary extends StatelessWidget {
-  const _Summary({required this.controller});
+  const _Summary({
+    required this.controller,
+    required this.onlyUnpaid,
+  });
 
   final PurchasesController controller;
+  final bool onlyUnpaid;
 
   @override
   Widget build(BuildContext context) {
@@ -122,7 +136,7 @@ class _Summary extends StatelessWidget {
 
     return StatTile(
       icon: Icons.receipt_long_rounded,
-      label: controller.onlyUnpaid.value ? 'UNPAID BILLS' : 'BILLS SHOWN',
+      label: onlyUnpaid ? 'UNPAID BILLS' : 'BILLS SHOWN',
       value: controller.total.display(decimals: false),
       foot: '$count bill${count == 1 ? '' : 's'}',
       tone: MoneyTone.outbound,

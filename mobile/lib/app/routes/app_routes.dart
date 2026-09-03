@@ -62,5 +62,6 @@ abstract class RouteArgs {
 
   /// Pre-selects a supplier or a bill when a form is opened from one.
   static const String presetSupplierId = 'preset_supplier_id';
+  static const String presetCustomerId = 'preset_customer_id';
   static const String presetPurchaseId = 'preset_purchase_id';
 }

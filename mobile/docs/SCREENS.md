@@ -17,8 +17,8 @@ differ deliberately it is called out.
 | Sync engine, outbox, conflict rules | Complete, 99 tests. |
 | Theme, palette, widget kit | Complete, 25 tests. |
 | Change bus, screen scaffold, loader base | Complete, 8 tests. |
-| Screens | 10 of 23 — splash, login, the shell, four supplier screens, three purchase screens. |
-| Routes | 8 of 22 registered. The four tab lists are shell tabs, not routes. |
+| Screens | 18 of 23 — everything but the dashboard, customers, fiscal years and shop details. |
+| Routes | 14 of 22 registered. The four tab lists are shell tabs, not routes. |
 
 Three pieces were added for the screens to share, and everything after Phase 1
 is expected to use them:
@@ -126,7 +126,7 @@ than making the shopkeeper key both.
 **Done when:** saving a bill moves the supplier's outstanding on a list that was
 already open (the Phase 0 decision, earning itself).
 
-### Phase 3 — Payments and the cheque register
+### Phase 3 — Payments and the cheque register ✅ BUILT
 
 **Why third:** this closes the loop — bills go up, payments bring them down —
 and it is where the product's one genuinely unusual idea lives: a cheque handed
@@ -148,7 +148,7 @@ running balance rather than omitting the line.
 **Done when:** issuing a cheque reduces what the supplier is owed while showing
 up separately as "not cleared", and clearing it later moves nothing.
 
-### Phase 4 — Sales
+### Phase 4 — Sales ✅ BUILT
 
 **Why fourth:** sales are independent of the supplier side, so they could come
 earlier, but the itemised form is the biggest screen in the app and is better
@@ -299,3 +299,93 @@ is exactly the case worth preserving rather than silently correcting.
 **Saving replaces the form** rather than pushing over it (`Get.offNamed`), so
 backing out of a bill you just saved does not land on a filled-in form inviting
 a duplicate.
+
+## Phase 3 as built
+
+Three payment screens plus the **More** tab, which had to exist for the cheque
+register to be reachable at all — a route with no way to it is not shipped. It
+lists the Phase 5 destinations disabled rather than hiding them, so the menu
+stays an honest map of what the app does.
+
+**`PartyField`** joined the kit and the bill form was moved onto it, deleting
+the near-identical private copy written in Phase 2. It is the slot a picked
+record sits in, and its subtitle is the reason it exists: a picked supplier
+shows what is currently owed, a picked bill shows what is left on it — the
+context that decides whether the amount about to be typed is the right one.
+
+**What the form does with mode:** cheque and reference fields are rendered only
+for the mode that uses them, and are **nulled on save** for every other mode —
+so switching from cheque to cash after typing cannot leave a stale cheque
+number attached to a cash payment.
+
+**What the form does with the bill:** only this supplier's *unpaid* bills are
+offered, the amount pre-fills to what is left on the chosen bill, and changing
+the supplier clears a bill belonging to the previous one. A payment filed
+against another supplier's bill is not a mistake worth allowing.
+
+**Both destructive actions state their consequence before it happens.**
+Clearing says what you owe does not change, because it does not — an issued
+cheque already counted. Cancelling says the amount goes *back* onto what you
+owe, and that the line stays on the statement. Cancelling is not deleting.
+
+## Phase 4 as built
+
+Four screens and the one real data-layer extension left in the plan.
+
+**`SaleRepository.dayBookFull`** returns a `DayBook`: the day's sales, the bills
+dated that day, the supplier payments dated that day, and the figures derived
+from all three. The three reads are assembled in the repository rather than the
+controller — a join in the widget layer is one refactor away from disagreeing
+with the lists beneath it.
+
+**The credit rule, in one place.** `DayBook` exposes `salesTotal` (turnover,
+credit included) and `received` (money, credit excluded) as separate figures,
+and `onCredit` as the gap. The day card shows the second as its headline and
+names the first in its caption, because a day that sold well on credit is a good
+day and a bad till — the screen should not have to choose which of those to
+report. `byMode` is built from **payment lines, not sale headers**: one sale can
+be settled half cash and half on account, and a header-level split would have to
+pick one and be wrong about the other.
+
+**Ten tests** pin that arithmetic, including the invariant that `received +
+onCredit` always reconstructs `salesTotal`, and that the mode split always sums
+to exactly `received` — so the card cannot contradict itself.
+
+**The itemised form derives its total and does not offer to override it.** The
+lines total is displayed, not editable, and `SaleRepository.save` recomputes it
+from the lines anyway. A line's amount goes through the same
+`calculateLineAmount` the model and the backend use, so a line previewed on the
+form and read back after saving cannot round differently.
+
+**A credit sale writes a CREDIT payment line for the full amount** rather than
+no line at all: "sold on credit" is a fact about the sale, and recording it as
+an absence would make it indistinguishable from a sale nobody has settled yet.
+A part-paid counter sale writes both lines, so the payments always add up to the
+sale total.
+
+## The Obx rule
+
+`Obx` tracks only the observables read **inside its own closure, while that
+closure runs**. A child widget's `build` runs later, outside that scope, so:
+
+```dart
+// Throws "improper use of a GetX" — the closure reads nothing.
+bottomBar: Obx(() => _SaveBar(controller: controller)),
+
+// Fine — the observables are read in the argument list, inside the closure.
+Obx(() => _BillField(bill: controller.againstBill.value)),
+
+// Fine — the widget owns its Obx, so the tracking closure is its own build.
+bottomBar: _SaveBar(controller: controller),   // with Obx inside build()
+```
+
+The failure has two faces and the loud one is the lucky one. If the closure
+reads *no* observable at all, GetX throws on sight. If it reads one but the
+child reads *another* untracked, nothing throws and the child simply never
+updates — which is how `_Actions` on the payment screen would have kept showing
+an idle button while a cheque was being cleared.
+
+So: a widget that reads `controller.something.value` either **wraps its own
+content in `Obx`**, or **takes the value as a plain constructor argument** read
+at a tracked call site. Passing just the controller and reading observables
+inside is the shape to avoid.

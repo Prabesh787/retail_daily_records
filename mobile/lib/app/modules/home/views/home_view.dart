@@ -6,7 +6,9 @@ import '../../../core/extensions/context_ext.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../services/auth_service.dart';
+import '../../more/views/more_view.dart';
 import '../../purchases/views/purchases_view.dart';
+import '../../sales/views/sales_view.dart';
 import '../../suppliers/views/suppliers_view.dart';
 import '../controllers/home_controller.dart';
 
@@ -68,9 +70,9 @@ class HomeView extends GetView<HomeController> {
           children: [
             _Placeholder(tab: _tabs[0]),
             const PurchasesView(),
-            _Placeholder(tab: _tabs[2]),
+            const SalesView(),
             const SuppliersView(),
-            _Placeholder(tab: _tabs[4]),
+            const MoreView(),
           ],
         ),
       ),
