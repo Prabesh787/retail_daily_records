@@ -33,6 +33,7 @@ class SyncEngine {
     required this.resolver,
     this.batchSize = 50,
     this.pullPageLimit = 200,
+    this.onEntityChanged,
   });
 
   final SyncApi api;
@@ -42,6 +43,13 @@ class SyncEngine {
   final ConflictResolver resolver;
   final int batchSize;
   final int pullPageLimit;
+
+  /// Called with an entity name once a pull has actually landed rows for it.
+  ///
+  /// A callback rather than a direct dependency on the change bus: the engine
+  /// is constructed with everything it needs and knows nothing about GetX,
+  /// which is what lets the sync tests run it without a service graph.
+  final void Function(String entity)? onEntityChanged;
 
   bool _running = false;
   bool get isRunning => _running;
@@ -195,6 +203,7 @@ class SyncEngine {
     for (final syncer in syncers) {
       var cursor = cursors.cursorFor(syncer.entity);
       var pages = 0;
+      var applied = 0;
 
       while (true) {
         final PullResult page;
@@ -209,7 +218,10 @@ class SyncEngine {
         }
 
         for (final row in page.rows) {
-          if (await _applyRow(syncer, row)) pulled++;
+          if (await _applyRow(syncer, row)) {
+            pulled++;
+            applied++;
+          }
         }
 
         // Advance only after the page is applied, so a crash mid-page replays
@@ -220,6 +232,10 @@ class SyncEngine {
         pages++;
         if (!page.hasMore || page.isEmpty || pages >= 50) break;
       }
+
+      // Once per entity rather than per row: a screen has no use for two
+      // hundred reloads of the same list.
+      if (applied > 0) onEntityChanged?.call(syncer.entity);
     }
 
     return SyncReport(pulled: pulled);

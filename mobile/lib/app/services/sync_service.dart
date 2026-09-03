@@ -11,6 +11,7 @@ import '../data/sync/sync_engine.dart';
 import '../data/sync/sync_models.dart';
 import '../data/sync/sync_state.dart';
 import 'connectivity_service.dart';
+import 'data_change_service.dart';
 import 'database_service.dart';
 import 'storage_service.dart';
 
@@ -52,6 +53,13 @@ class SyncService extends GetxService with WidgetsBindingObserver {
       syncers: buildSyncers(_db.db),
       cursors: _storage,
       resolver: ConflictResolver(deviceId: _storage.deviceId),
+      // Rows pulled from the server are writes too. Without this a list stays
+      // on screen showing what it read before the sync ran.
+      onEntityChanged: (entity) {
+        if (Get.isRegistered<DataChangeService>()) {
+          Get.find<DataChangeService>().publish([entity]);
+        }
+      },
     );
 
     await refreshCounts();

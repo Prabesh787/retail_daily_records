@@ -7,7 +7,9 @@ sync is a background reconciliation with whatever backend gets chosen.
 lib/
 ├── main.dart                       services awaited before the first frame
 └── app/
-    ├── core/                       theme, constants, utils, shared widgets
+    ├── core/                       theme, constants, utils
+    │   └── widgets/                the shared kit — generic pieces
+    │       └── domain/             …and the ones that know a bill from a sale
     ├── data/
     │   ├── models/                 local domain objects (+ their CREATE TABLE)
     │   ├── dto/                    wire format ⇄ model. The insulation layer.
@@ -43,6 +45,14 @@ an immutable row cannot conflict. Genuine conflicts are limited to master data
 aggregates over the documents, never stored totals. A stored balance drifts the
 moment a bill is voided or a row arrives out of order from sync.
 
+**The widget kit has two halves, and only one of them knows the domain.**
+`core/widgets/` is generic — a row, a badge, a sheet — and imports no model.
+`core/widgets/domain/` is where a `Purchase` becomes a `PurchaseRow`. The split
+is what keeps the generic half restyleable without dragging the data layer
+behind it, and it mirrors the web app's `ui/` and `domain/` folders so a change
+to one has an obvious counterpart in the other. Rows never navigate: the same
+row appears in a list and in a picker, so the screen passes what a tap means.
+
 **Ids are UUIDs generated on the device.** Not server auto-increments — an
 offline-created bill has to be addressable, and its items have to reference it,
 before it has ever seen a network.
@@ -66,7 +76,7 @@ See [BACKEND_CONTRACT.md](BACKEND_CONTRACT.md) for the server side.
 ```bash
 flutter run                                            # local only
 flutter run --dart-define=API_BASE_URL=https://…       # with sync
-flutter test                                           # 16 tests, no backend needed
+flutter test                                           # 124 tests, no backend needed
 ```
 
 Windows desktop works for development — `DbHelper` switches to the sqflite FFI

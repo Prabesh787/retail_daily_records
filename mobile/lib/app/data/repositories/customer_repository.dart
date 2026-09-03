@@ -5,6 +5,9 @@ import '../models/customer.dart';
 import 'base_repository.dart';
 
 class CustomerRepository extends BaseRepository {
+  @override
+  String get entity => DbTables.customer;
+
   Future<List<Customer>> list({String? search}) =>
       dbService.customers.all(search: search);
 

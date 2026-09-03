@@ -7,6 +7,9 @@ import '../models/purchase.dart';
 import 'base_repository.dart';
 
 class PurchaseRepository extends BaseRepository {
+  @override
+  String get entity => DbTables.purchase;
+
   Future<List<Purchase>> list({
     String? supplierId,
     String? fiscalYearId,

@@ -11,6 +11,9 @@ import '../providers/local/sale_dao.dart';
 import 'base_repository.dart';
 
 class SaleRepository extends BaseRepository {
+  @override
+  String get entity => DbTables.sale;
+
   Future<List<Sale>> list({
     String? customerId,
     String? fiscalYearId,

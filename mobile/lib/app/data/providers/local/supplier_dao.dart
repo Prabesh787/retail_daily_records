@@ -5,6 +5,43 @@ import '../../../core/domain/money.dart';
 import '../../enums/payment_status.dart';
 import '../../models/supplier.dart';
 
+/// What a supplier's books did over one date window.
+///
+/// The same six figures the statement header and the detail screen's range card
+/// both show, so the two cannot disagree about a window they are both looking
+/// at. Every one of them is derived; none is stored.
+class SupplierWindow {
+  const SupplierWindow({
+    this.openingAsOf = Money.zero,
+    this.purchaseTotal = Money.zero,
+    this.paymentTotal = Money.zero,
+    this.unclearedTotal = Money.zero,
+    this.billCount = 0,
+    this.paymentCount = 0,
+  });
+
+  /// Owed on the morning the window opens — the balance carried in.
+  final Money openingAsOf;
+
+  final Money purchaseTotal;
+
+  /// Payments that settled something. Cancelled ones are not in here.
+  final Money paymentTotal;
+
+  /// The part of [paymentTotal] that is cheques the bank has not debited yet.
+  final Money unclearedTotal;
+
+  final int billCount;
+
+  /// Counts cancelled payments too: they are listed on the statement.
+  final int paymentCount;
+
+  /// The balance carried out. The whole point of the window.
+  Money get closing => openingAsOf + purchaseTotal - paymentTotal;
+
+  bool get isEmpty => billCount == 0 && paymentCount == 0;
+}
+
 class SupplierDao {
   const SupplierDao(this._db);
 
@@ -120,6 +157,104 @@ class SupplierDao {
     return (
       total: Money.fromColumn(row['total']),
       supplierCount: (row['cnt'] as int?) ?? 0,
+    );
+  }
+
+  /// A supplier's position over one date window.
+  ///
+  /// The figure that makes this necessary is [openingAsOf] — what was owed on
+  /// the morning the window opens. The all-time balance cannot answer it, and
+  /// without it a statement has nothing to carry forward from, so the movements
+  /// inside the window would appear to start from zero.
+  ///
+  /// Bounds are inclusive and either may be null, which means "no bound":
+  /// a statement with no `from` opens at the supplier's opening balance, which
+  /// is exactly right.
+  ///
+  /// Cancelled payments are excluded from the money but counted in
+  /// [paymentCount], because the statement still lists them — a bounced cheque
+  /// is part of the audit trail even though it settled nothing.
+  Future<SupplierWindow> window(
+    String id, {
+    int? fromMs,
+    int? toMs,
+  }) async {
+    // Built as fragments rather than with fixed placeholders, so a null bound
+    // drops out of the SQL instead of being smuggled in as a sentinel date.
+    final priorArgs = <Object?>[];
+    final prior = fromMs == null
+        ? '0'
+        : '''
+      COALESCE((
+        SELECT SUM(amount) FROM ${DbTables.purchase}
+        WHERE supplier_id = s.id AND is_deleted = 0 AND bill_date < ?
+      ), 0)
+      - COALESCE((
+        SELECT SUM(amount) FROM ${DbTables.supplierPayment}
+        WHERE supplier_id = s.id AND is_deleted = 0
+          AND status <> '$_cancelled' AND payment_date < ?
+      ), 0)''';
+    if (fromMs != null) priorArgs..add(fromMs)..add(fromMs);
+
+    String range(String column) {
+      final parts = <String>[];
+      if (fromMs != null) parts.add('AND $column >= ?');
+      if (toMs != null) parts.add('AND $column <= ?');
+      return parts.join(' ');
+    }
+
+    final billArgs = [?fromMs, ?toMs];
+    final payArgs = [?fromMs, ?toMs];
+
+    final rows = await _db.rawQuery('''
+      SELECT
+        s.opening_balance AS opening_balance,
+        s.opening_balance + ($prior) AS opening_as_of,
+        COALESCE((
+          SELECT SUM(amount) FROM ${DbTables.purchase}
+          WHERE supplier_id = s.id AND is_deleted = 0 ${range('bill_date')}
+        ), 0) AS purchase_total,
+        COALESCE((
+          SELECT COUNT(*) FROM ${DbTables.purchase}
+          WHERE supplier_id = s.id AND is_deleted = 0 ${range('bill_date')}
+        ), 0) AS bill_count,
+        COALESCE((
+          SELECT SUM(amount) FROM ${DbTables.supplierPayment}
+          WHERE supplier_id = s.id AND is_deleted = 0
+            AND status <> '$_cancelled' ${range('payment_date')}
+        ), 0) AS payment_total,
+        COALESCE((
+          SELECT SUM(amount) FROM ${DbTables.supplierPayment}
+          WHERE supplier_id = s.id AND is_deleted = 0
+            AND status = '$_issued' ${range('payment_date')}
+        ), 0) AS uncleared_total,
+        COALESCE((
+          SELECT COUNT(*) FROM ${DbTables.supplierPayment}
+          WHERE supplier_id = s.id AND is_deleted = 0 ${range('payment_date')}
+        ), 0) AS payment_count
+      FROM ${DbTables.supplier} s
+      WHERE s.id = ? AND s.is_deleted = 0
+      LIMIT 1
+    ''', [
+      ...priorArgs,
+      ...billArgs,
+      ...billArgs,
+      ...payArgs,
+      ...payArgs,
+      ...payArgs,
+      id,
+    ]);
+
+    if (rows.isEmpty) return const SupplierWindow();
+    final row = rows.first;
+
+    return SupplierWindow(
+      openingAsOf: Money.fromColumn(row['opening_as_of']),
+      purchaseTotal: Money.fromColumn(row['purchase_total']),
+      paymentTotal: Money.fromColumn(row['payment_total']),
+      unclearedTotal: Money.fromColumn(row['uncleared_total']),
+      billCount: (row['bill_count'] as int?) ?? 0,
+      paymentCount: (row['payment_count'] as int?) ?? 0,
     );
   }
 

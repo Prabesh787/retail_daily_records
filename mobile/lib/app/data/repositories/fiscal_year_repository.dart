@@ -7,6 +7,9 @@ import '../models/fiscal_year.dart';
 import 'base_repository.dart';
 
 class FiscalYearRepository extends BaseRepository {
+  @override
+  String get entity => DbTables.fiscalYear;
+
   Future<List<FiscalYear>> list() => dbService.fiscalYears.all();
 
   Future<FiscalYear?> byId(String id) => dbService.fiscalYears.byId(id);

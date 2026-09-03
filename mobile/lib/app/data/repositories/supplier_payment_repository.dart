@@ -8,6 +8,9 @@ import '../enums/sync_status.dart';
 import 'base_repository.dart';
 
 class SupplierPaymentRepository extends BaseRepository {
+  @override
+  String get entity => DbTables.supplierPayment;
+
   Future<List<SupplierPayment>> list({
     String? supplierId,
     String? purchaseId,

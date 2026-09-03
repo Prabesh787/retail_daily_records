@@ -6,6 +6,8 @@ import '../../../core/extensions/context_ext.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../services/auth_service.dart';
+import '../../purchases/views/purchases_view.dart';
+import '../../suppliers/views/suppliers_view.dart';
 import '../controllers/home_controller.dart';
 
 /// The five destinations, matching the web app's tab bar.
@@ -57,11 +59,18 @@ class HomeView extends GetView<HomeController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // An IndexedStack, so a half-filtered list survives a trip to another tab
+      // and back. Each tab is swapped from the placeholder to its real screen
+      // as that screen is built.
       body: Obx(
         () => IndexedStack(
           index: controller.tabIndex.value,
           children: [
-            for (final tab in _tabs) _Placeholder(tab: tab),
+            _Placeholder(tab: _tabs[0]),
+            const PurchasesView(),
+            _Placeholder(tab: _tabs[2]),
+            const SuppliersView(),
+            _Placeholder(tab: _tabs[4]),
           ],
         ),
       ),

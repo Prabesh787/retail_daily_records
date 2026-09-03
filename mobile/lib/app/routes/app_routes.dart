@@ -15,6 +15,7 @@ abstract class Routes {
   static const String suppliers = '/suppliers';
   static const String supplierForm = '/suppliers/form';
   static const String supplierDetail = '/suppliers/detail';
+  static const String supplierStatement = '/suppliers/statement';
 
   static const String customers = '/customers';
   static const String customerForm = '/customers/form';
@@ -52,6 +53,12 @@ abstract class RouteArgs {
 
   /// A day, as epoch millis at UTC midnight - the day book's argument.
   static const String dateMs = 'date_ms';
+
+  /// A date window, as epoch millis. The statement carries whatever range the
+  /// detail screen was showing, so opening the report does not lose the filter
+  /// the user just set.
+  static const String fromMs = 'from_ms';
+  static const String toMs = 'to_ms';
 
   /// Pre-selects a supplier or a bill when a form is opened from one.
   static const String presetSupplierId = 'preset_supplier_id';

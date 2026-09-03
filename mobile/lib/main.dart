@@ -9,6 +9,7 @@ import 'app/data/providers/remote/auth_api.dart';
 import 'app/routes/app_pages.dart';
 import 'app/services/auth_service.dart';
 import 'app/services/connectivity_service.dart';
+import 'app/services/data_change_service.dart';
 import 'app/services/database_service.dart';
 import 'app/services/storage_service.dart';
 import 'app/services/sync_service.dart';
@@ -19,6 +20,7 @@ Future<void> main() async {
   // Services are awaited before the first frame: no screen can render against a
   // database that is not open or settings that are not loaded. Order matters -
   // SyncService reads the others.
+  Get.put(DataChangeService(), permanent: true);
   await Get.putAsync(() => StorageService().init(), permanent: true);
   await Get.putAsync(() => DatabaseService().init(), permanent: true);
   await Get.putAsync(() => ConnectivityService().init(), permanent: true);
