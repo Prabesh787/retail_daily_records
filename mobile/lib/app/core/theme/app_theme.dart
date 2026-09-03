@@ -20,13 +20,22 @@ class AppTheme {
   static ThemeData _build(AppPalette p, Brightness brightness) {
     final base = ThemeData(brightness: brightness, useMaterial3: true);
 
+    // Every slot names its own colour.
+    //
+    // `AppTextStyles` are shapes — size, weight, spacing — and carry no colour
+    // on purpose, so the same shape can be inked differently in different
+    // places. That makes `copyWith` here dangerous: it *replaces* a slot, so a
+    // colourless style silently discards the `bodyColor` applied above it. Text
+    // with no colour anywhere in its chain is painted **white** by the engine,
+    // which on a white card is not a subtle bug but an invisible one.
     final textTheme = base.textTheme
         .apply(bodyColor: p.ink, displayColor: p.ink)
         .copyWith(
-          headlineMedium: AppTextStyles.h1,
-          headlineSmall: AppTextStyles.h2,
-          titleMedium: AppTextStyles.title,
-          bodyMedium: AppTextStyles.body,
+          headlineMedium: AppTextStyles.h1.copyWith(color: p.ink),
+          headlineSmall: AppTextStyles.h2.copyWith(color: p.ink),
+          titleMedium: AppTextStyles.title.copyWith(color: p.ink),
+          bodyLarge: AppTextStyles.body.copyWith(color: p.ink),
+          bodyMedium: AppTextStyles.body.copyWith(color: p.ink),
           bodySmall: AppTextStyles.caption.copyWith(color: p.inkMuted),
           labelSmall: AppTextStyles.label.copyWith(color: p.inkSubtle),
         );

@@ -11,6 +11,7 @@ library;
 export '../theme/tone_colors.dart' show DomainToneColors, MoneyTone, MoneyToneColors;
 export '../controllers/loader_controller.dart';
 export '../domain/day_group.dart';
+export '../domain/trend_point.dart';
 export 'app_badge.dart';
 export 'app_button.dart';
 export 'app_card.dart';

@@ -3,17 +3,11 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_sizes.dart';
 import '../domain/money.dart';
+import '../domain/trend_point.dart';
 import '../extensions/context_ext.dart';
 import '../theme/app_text_styles.dart';
 import '../utils/date_utils.dart';
 
-/// One day's takings.
-class TrendPoint {
-  const TrendPoint({required this.dateMs, required this.amount});
-
-  final int dateMs;
-  final Money amount;
-}
 
 /// Daily sales over the last couple of weeks.
 ///

@@ -16,6 +16,8 @@ import 'package:billrecord/app/data/repositories/sale_repository.dart';
 import 'package:billrecord/app/data/repositories/supplier_payment_repository.dart';
 import 'package:billrecord/app/data/repositories/supplier_repository.dart';
 import 'package:billrecord/app/modules/customers/bindings/customers_binding.dart';
+import 'package:billrecord/app/modules/dashboard/bindings/dashboard_binding.dart';
+import 'package:billrecord/app/modules/dashboard/views/dashboard_view.dart';
 import 'package:billrecord/app/modules/customers/views/customer_form_view.dart';
 import 'package:billrecord/app/modules/customers/views/customers_view.dart';
 import 'package:billrecord/app/modules/more/controllers/more_controller.dart';
@@ -156,20 +158,26 @@ void main() {
 
   group('suppliers', () {
     testWidgets('list renders empty', (tester) async {
-      await pumpScreen(tester, const SuppliersView(),
-          binding: BindingsBuilder(() {
-        Get.put(SuppliersController());
-      }));
+      await pumpScreen(
+        tester,
+        const SuppliersView(),
+        binding: BindingsBuilder(() {
+          Get.put(SuppliersController());
+        }),
+      );
 
       expect(find.text('No suppliers yet'), findsOneWidget);
     });
 
     testWidgets('list renders a supplier', (tester) async {
       await seed(tester, seedSupplier);
-      await pumpScreen(tester, const SuppliersView(),
-          binding: BindingsBuilder(() {
-        Get.put(SuppliersController());
-      }));
+      await pumpScreen(
+        tester,
+        const SuppliersView(),
+        binding: BindingsBuilder(() {
+          Get.put(SuppliersController());
+        }),
+      );
 
       expect(find.text('ABC Textiles'), findsOneWidget);
     });
@@ -217,10 +225,13 @@ void main() {
 
   group('purchases', () {
     testWidgets('list renders empty', (tester) async {
-      await pumpScreen(tester, const PurchasesView(),
-          binding: BindingsBuilder(() {
-        Get.put(PurchasesController());
-      }));
+      await pumpScreen(
+        tester,
+        const PurchasesView(),
+        binding: BindingsBuilder(() {
+          Get.put(PurchasesController());
+        }),
+      );
 
       expect(find.text('No purchases yet'), findsOneWidget);
     });
@@ -230,10 +241,13 @@ void main() {
       final supplier = await seed(tester, seedSupplier);
       await seed(tester, () => seedBill(year.id, supplier.id));
 
-      await pumpScreen(tester, const PurchasesView(),
-          binding: BindingsBuilder(() {
-        Get.put(PurchasesController());
-      }));
+      await pumpScreen(
+        tester,
+        const PurchasesView(),
+        binding: BindingsBuilder(() {
+          Get.put(PurchasesController());
+        }),
+      );
 
       expect(find.textContaining('4471'), findsWidgets);
     });
@@ -267,8 +281,9 @@ void main() {
   // ---- Payments -----------------------------------------------------------
 
   group('payments', () {
-    testWidgets('form renders, and the cheque fields appear on demand',
-        (tester) async {
+    testWidgets('form renders, and the cheque fields appear on demand', (
+      tester,
+    ) async {
       await pumpScreen(
         tester,
         const PaymentFormView(),
@@ -333,9 +348,13 @@ void main() {
 
   group('sales', () {
     testWidgets('list renders empty', (tester) async {
-      await pumpScreen(tester, const SalesView(), binding: BindingsBuilder(() {
-        Get.put(SalesController());
-      }));
+      await pumpScreen(
+        tester,
+        const SalesView(),
+        binding: BindingsBuilder(() {
+          Get.put(SalesController());
+        }),
+      );
 
       expect(find.text('No sales yet'), findsOneWidget);
     });
@@ -344,9 +363,13 @@ void main() {
       final year = await seed(tester, seedYear);
       await seed(tester, () => seedSale(year.id));
 
-      await pumpScreen(tester, const SalesView(), binding: BindingsBuilder(() {
-        Get.put(SalesController());
-      }));
+      await pumpScreen(
+        tester,
+        const SalesView(),
+        binding: BindingsBuilder(() {
+          Get.put(SalesController());
+        }),
+      );
 
       expect(find.text('SOLD'), findsOneWidget);
       expect(find.text('TAKEN'), findsOneWidget);
@@ -405,8 +428,9 @@ void main() {
       expect(find.text('Nothing on this day'), findsOneWidget);
     });
 
-    testWidgets('day book renders takings and the other side of the day',
-        (tester) async {
+    testWidgets('day book renders takings and the other side of the day', (
+      tester,
+    ) async {
       final year = await seed(tester, seedYear);
       final supplier = await seed(tester, seedSupplier);
       await seed(tester, () => seedSale(year.id));
@@ -422,6 +446,45 @@ void main() {
       expect(find.text('TAKINGS'), findsOneWidget);
       // The bill dated the same day is the half a sales-only screen would miss.
       expect(find.textContaining('BILLS TAKEN ON'), findsOneWidget);
+    });
+  });
+
+  // ---- Dashboard ----------------------------------------------------------
+
+  group('dashboard', () {
+    testWidgets('welcomes a shop with nothing recorded', (tester) async {
+      await pumpScreen(
+        tester,
+        const DashboardView(),
+        binding: DashboardBinding(),
+      );
+
+      expect(find.text('SALES TODAY'), findsOneWidget);
+      // A fresh shop is a different thing from a quiet day, and says so.
+      expect(find.text('Nothing recorded yet'), findsOneWidget);
+    });
+
+    testWidgets('summarises a shop that has traded', (tester) async {
+      final year = await seed(tester, seedYear);
+      final supplier = await seed(tester, seedSupplier);
+      await seed(tester, () => seedSale(year.id));
+      await seed(tester, () => seedBill(year.id, supplier.id));
+      await seed(tester, () => seedCheque(year.id, supplier.id));
+
+      await pumpScreen(
+        tester,
+        const DashboardView(),
+        binding: DashboardBinding(),
+      );
+
+      expect(find.text('PAYABLE TO SUPPLIERS'), findsOneWidget);
+      expect(find.text('CHEQUES NOT CLEARED'), findsOneWidget);
+      expect(find.text('OWED THE MOST'), findsOneWidget);
+      expect(find.text('LATEST SALES'), findsOneWidget);
+      expect(find.text('LATEST BILLS'), findsOneWidget);
+      // The cheque is dated three days out, so the alert names the wait.
+      expect(find.textContaining('Next cheque in 3 days'), findsOneWidget);
+      expect(find.text('Nothing recorded yet'), findsNothing);
     });
   });
 
@@ -485,8 +548,9 @@ void main() {
       expect(find.text('Currency symbol'), findsOneWidget);
     });
 
-    testWidgets('more renders its sections and the theme control',
-        (tester) async {
+    testWidgets('more renders its sections and the theme control', (
+      tester,
+    ) async {
       await pumpScreen(
         tester,
         const MoreView(),
@@ -526,4 +590,3 @@ void main() {
     expect(find.text('ABC Textiles'), findsWidgets);
   });
 }
-

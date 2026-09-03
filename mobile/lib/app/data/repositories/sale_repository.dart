@@ -116,11 +116,19 @@ class SaleRepository extends BaseRepository {
     final timestamp = nowMs;
     final id = isNew ? newId() : sale.id;
 
-    // Lines are re-keyed to the sale before the totals are derived, so a line
-    // built by a form that did not know the sale's id yet still points at it.
+    // Lines and payments are re-keyed to the sale before the totals are
+    // derived, so a row built by a form that did not know the sale's id yet
+    // still points at it.
+    //
+    // They are also given ids here if they arrived without one. A form has no
+    // business inventing primary keys, and the id columns are unique: leaving
+    // them empty writes one row successfully and makes the *second* sale of the
+    // app's life fail on a constraint violation, which is a long way from where
+    // the mistake was made.
     final items = <SaleItem>[
       for (var index = 0; index < sale.items.length; index += 1)
         sale.items[index].copyWith(
+          id: sale.items[index].id.isEmpty ? newId() : sale.items[index].id,
           saleId: id,
           sortOrder: index,
           createdAt: sale.items[index].createdAt == 0
@@ -131,6 +139,7 @@ class SaleRepository extends BaseRepository {
     final payments = <SalePayment>[
       for (final payment in sale.payments)
         payment.copyWith(
+          id: payment.id.isEmpty ? newId() : payment.id,
           saleId: id,
           createdAt: payment.createdAt == 0 ? timestamp : payment.createdAt,
         ),

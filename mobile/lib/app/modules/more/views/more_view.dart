@@ -57,10 +57,11 @@ class MoreView extends GetView<MoreController> {
                     ],
                   ),
                 ),
-                // Where the sync state belongs: this screen and the dashboard
-                // are the two places someone goes to ask whether their records
-                // have actually left the phone.
-                if (controller.syncAvailable) const SyncStatusChip(),
+                // Where the sync state belongs: here and the dashboard are the
+                // two places someone goes to ask whether their records have
+                // actually left the phone. The chip reports nothing when there
+                // is no sync service, so it needs no guard here.
+                const SyncStatusChip(),
               ],
             ),
           ),

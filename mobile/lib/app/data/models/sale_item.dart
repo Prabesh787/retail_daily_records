@@ -85,7 +85,11 @@ class SaleItem {
         createdAt: SyncableModel.toInt(map['created_at']),
       );
 
+  /// [id] is accepted so the repository can assign one to a line that a form
+  /// built without it. Every other caller omits it and keeps the identity it
+  /// had, which is what copying a row should do.
   SaleItem copyWith({
+    String? id,
     String? saleId,
     String? description,
     Quantity? quantity,
@@ -96,7 +100,7 @@ class SaleItem {
     int? createdAt,
   }) =>
       SaleItem(
-        id: id,
+        id: id ?? this.id,
         saleId: saleId ?? this.saleId,
         description: description ?? this.description,
         quantity: quantity ?? this.quantity,

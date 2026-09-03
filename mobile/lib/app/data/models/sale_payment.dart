@@ -88,7 +88,10 @@ class SalePayment {
         createdAt: SyncableModel.toInt(map['created_at']),
       );
 
+  /// [id] is accepted so the repository can assign one to a payment line that
+  /// a form built without it; every other caller keeps the identity it had.
   SalePayment copyWith({
+    String? id,
     String? saleId,
     SalePaymentMode? paymentMode,
     Money? amount,
@@ -101,7 +104,7 @@ class SalePayment {
     int? createdAt,
   }) =>
       SalePayment(
-        id: id,
+        id: id ?? this.id,
         saleId: saleId ?? this.saleId,
         paymentMode: paymentMode ?? this.paymentMode,
         amount: amount ?? this.amount,

@@ -17,8 +17,8 @@ differ deliberately it is called out.
 | Sync engine, outbox, conflict rules | Complete, 99 tests. |
 | Theme, palette, widget kit | Complete, 25 tests. |
 | Change bus, screen scaffold, loader base | Complete, 8 tests. |
-| Screens | 22 of 23 — everything but the dashboard. |
-| Routes | 18 of 22 registered. The four tab lists are shell tabs, not routes. |
+| Screens | 23 of 23. All six phases built. |
+| Routes | 18 of 22. The four remaining constants are tab lists, reached as shell tabs. |
 
 Three pieces were added for the screens to share, and everything after Phase 1
 is expected to use them:
@@ -195,7 +195,7 @@ the `HomeView` app bar.
   dashboard header and in the More screen.
 - **Remove the temporary sign-out** from `HomeView`'s app bar once More exists.
 
-### Phase 6 — Dashboard
+### Phase 6 — Dashboard ✅ BUILT
 
 **Why last:** it reads from every other screen's data. Built first it would be
 mocked; built last it is assembled from queries that already exist.
@@ -456,3 +456,39 @@ Two things worth knowing about the screens themselves:
 A failed push is reported as "saved on this device" rather than an error,
 because the change *was* kept — an offline-first app whose shop cannot rename
 itself offline would be a strange thing.
+
+## Phase 6 as built
+
+One view, one `DashboardRepository` that composes queries the other phases
+already own, and no new SQL. That was the point of building it last.
+
+**One method, one await point.** Seven separate loads would give the screen
+seven chances to be half-drawn, and a dashboard that fills in piecemeal reads
+as broken on exactly the slow phone this app is for.
+
+**The trend fills its gaps.** The DAO returns only days that had sales;
+plotting those alone draws a line that skips the quiet days and makes a bad
+week look steady. The repository expands them to one point per day, zeros
+included — the gaps are the information.
+
+**`TrendPoint` moved to `core/domain/`.** A repository producing a fortnight of
+them should not have to import the chart that draws them; the data layer
+depending on the widget layer is the wrong way round.
+
+### Two real bugs these tests caught
+
+**Sale lines and payments were saved with an empty id.** `SaleRepository.save`
+re-keyed each row to its sale but never gave it an id of its own, and a form has
+no business inventing primary keys — so every row arrived with `id: ''`. That
+inserts once and then violates the unique constraint: the app would have saved
+exactly **one sale with a payment** and failed on the second, with the error
+surfacing a long way from the mistake. Fixed in the repository, which already
+stamps the sale's own id, and pinned by a test that saves two sales.
+
+**`SyncStatusChip` threw when no sync service was registered.** Harmless in the
+app as it stands, since `main` always registers one — but the More screen
+guarded the chip and the dashboard did not, and an inconsistency like that is
+one refactor away from a crash in the header of the first screen anyone sees.
+The check now lives inside the chip, once.
+
+Neither was reachable by any test that did not actually build a screen.

@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../../core/constants/app_sizes.dart';
-import '../../../core/extensions/context_ext.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/app_card.dart';
-import '../../../services/auth_service.dart';
+import '../../dashboard/views/dashboard_view.dart';
 import '../../more/views/more_view.dart';
 import '../../purchases/views/purchases_view.dart';
 import '../../sales/views/sales_view.dart';
@@ -18,43 +14,37 @@ import '../controllers/home_controller.dart';
 /// customers, the cheque register, fiscal years — lives under More rather than
 /// being squeezed in.
 ///
-/// Each tab is filled in as its screens are built. The placeholder below states
-/// plainly what is coming rather than showing an empty page, because a blank
-/// tab reads as a bug.
+/// All five are real screens now; the shell does nothing but hold them and
+/// remember which one is showing.
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
 
-  static const List<({IconData icon, IconData active, String label, String note})>
+  static const List<({IconData icon, IconData active, String label})>
       _tabs = [
     (
       icon: Icons.dashboard_outlined,
       active: Icons.dashboard_rounded,
       label: 'Home',
-      note: 'Today’s takings, what you owe, and the next cheque due.',
     ),
     (
       icon: Icons.receipt_long_outlined,
       active: Icons.receipt_long_rounded,
       label: 'Purchases',
-      note: 'Wholesale bills, grouped by the day they were entered.',
     ),
     (
       icon: Icons.point_of_sale_outlined,
       active: Icons.point_of_sale_rounded,
       label: 'Sales',
-      note: 'Each sale on its own row, with the day’s takings on the header.',
     ),
     (
       icon: Icons.storefront_outlined,
       active: Icons.storefront_rounded,
       label: 'Suppliers',
-      note: 'Ordered by what is owed, with a statement per supplier.',
     ),
     (
       icon: Icons.more_horiz_rounded,
       active: Icons.more_horiz_rounded,
       label: 'More',
-      note: 'Cheque register, customers, fiscal years and shop details.',
     ),
   ];
 
@@ -62,13 +52,13 @@ class HomeView extends GetView<HomeController> {
   Widget build(BuildContext context) {
     return Scaffold(
       // An IndexedStack, so a half-filtered list survives a trip to another tab
-      // and back. Each tab is swapped from the placeholder to its real screen
-      // as that screen is built.
+      // and back — a search typed on Suppliers is still there after a look at
+      // the dashboard.
       body: Obx(
         () => IndexedStack(
           index: controller.tabIndex.value,
           children: [
-            _Placeholder(tab: _tabs[0]),
+            const DashboardView(),
             const PurchasesView(),
             const SalesView(),
             const SuppliersView(),
@@ -88,70 +78,6 @@ class HomeView extends GetView<HomeController> {
                 label: tab.label,
               ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Placeholder extends StatelessWidget {
-  const _Placeholder({required this.tab});
-
-  final ({IconData icon, IconData active, String label, String note}) tab;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final auth = AuthService.to;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(tab.label),
-        actions: [
-          Center(
-            child: Text(
-              auth.shopName,
-              style: AppTextStyles.caption.copyWith(color: palette.inkSubtle),
-            ),
-          ),
-          AppSizes.gapMd,
-        ],
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSizes.xl),
-          child: AppCard(
-            padding: const EdgeInsets.all(AppSizes.xl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconPlate(icon: tab.active, color: palette.brand, size: 52),
-                AppSizes.gapLg,
-                Text(tab.label, style: AppTextStyles.h2.copyWith(color: palette.ink)),
-                AppSizes.gapSm,
-                Text(
-                  tab.note,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.body.copyWith(color: palette.inkMuted),
-                ),
-                AppSizes.gapLg,
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSizes.md,
-                    vertical: AppSizes.xs,
-                  ),
-                  decoration: BoxDecoration(
-                    color: palette.pendingSoft,
-                    borderRadius: BorderRadius.circular(AppSizes.radiusPill),
-                  ),
-                  child: Text(
-                    'Being built',
-                    style: AppTextStyles.label.copyWith(color: palette.pending),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

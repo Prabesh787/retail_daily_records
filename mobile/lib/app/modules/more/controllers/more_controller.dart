@@ -4,18 +4,12 @@ import 'package:get/get.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/storage_service.dart';
-import '../../../services/sync_service.dart';
 
 /// The More tab.
 class MoreController extends GetxController {
   final StorageService _storage = Get.find<StorageService>();
 
   late final Rx<ThemeMode> themeMode = _storage.themeMode.obs;
-
-  /// Whether there is a sync service to report on at all. The app runs
-  /// perfectly well local-only, and a status chip in that state would be
-  /// reporting on something the user has not switched on.
-  bool get syncAvailable => Get.isRegistered<SyncService>();
 
   /// Applies the theme immediately and remembers it.
   ///

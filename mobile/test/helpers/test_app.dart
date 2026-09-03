@@ -7,6 +7,7 @@ import 'package:billrecord/app/data/providers/local/db_helper.dart';
 import 'package:billrecord/app/data/providers/remote/api_client.dart';
 import 'package:billrecord/app/data/providers/remote/auth_api.dart';
 import 'package:billrecord/app/data/repositories/customer_repository.dart';
+import 'package:billrecord/app/data/repositories/dashboard_repository.dart';
 import 'package:billrecord/app/data/repositories/fiscal_year_repository.dart';
 import 'package:billrecord/app/data/repositories/purchase_repository.dart';
 import 'package:billrecord/app/data/repositories/sale_repository.dart';
@@ -82,6 +83,7 @@ class TestApp {
     Get.put(PurchaseRepository(), permanent: true);
     Get.put(SupplierPaymentRepository(), permanent: true);
     Get.put(SaleRepository(), permanent: true);
+    Get.put(DashboardRepository(), permanent: true);
 
     return TestApp._(db, storageDir);
   }
