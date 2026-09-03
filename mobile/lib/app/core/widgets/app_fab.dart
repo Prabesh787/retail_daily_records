@@ -35,7 +35,10 @@ class AppFab extends StatelessWidget {
       extendedPadding: const EdgeInsets.symmetric(horizontal: AppSizes.xl),
       shape: const StadiumBorder(),
       icon: Icon(icon, size: 20),
-      label: Text(label, style: AppTextStyles.button),
+      label: Text(
+        label,
+        style: AppTextStyles.button.copyWith(color: Colors.white),
+      ),
     );
   }
 }

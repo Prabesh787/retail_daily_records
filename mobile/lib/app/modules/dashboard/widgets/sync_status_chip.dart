@@ -16,6 +16,12 @@ class SyncStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Nothing to report if there is no sync service to report on. The app runs
+    // perfectly well local-only, and a chip that throws in that case would take
+    // the whole dashboard header down with it — so the check lives here, once,
+    // rather than at each of the two places that mount it.
+    if (!Get.isRegistered<SyncService>()) return const SizedBox.shrink();
+
     final service = SyncService.to;
 
     return Obx(() {

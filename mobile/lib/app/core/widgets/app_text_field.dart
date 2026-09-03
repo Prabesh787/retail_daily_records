@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../constants/app_sizes.dart';
+import '../extensions/context_ext.dart';
 import '../theme/app_text_styles.dart';
 
 /// The shared input. A bill form, a payment form and a party form are ~80% the
@@ -65,10 +66,18 @@ class AppTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTextStyles.caption),
+        // Inked here rather than left to the ambient default. The label and the
+        // text being typed are the two things on a form that must never be
+        // invisible, and a shape-only style inherits whatever it lands in.
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(color: palette.inkMuted),
+        ),
         AppSizes.gapXs,
         TextFormField(
           controller: controller,
@@ -81,7 +90,7 @@ class AppTextField extends StatelessWidget {
           autofocus: autofocus,
           onChanged: onChanged,
           textInputAction: textInputAction,
-          style: AppTextStyles.body,
+          style: AppTextStyles.body.copyWith(color: palette.ink),
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: prefixIcon == null ? null : Icon(prefixIcon, size: 20),

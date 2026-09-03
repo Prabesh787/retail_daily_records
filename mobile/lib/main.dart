@@ -55,7 +55,7 @@ class BillRecordApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: storage.isDarkMode ? ThemeMode.dark : ThemeMode.system,
+      themeMode: storage.themeMode,
       initialRoute: AppPages.initial,
       getPages: AppPages.routes,
       defaultTransition: Transition.cupertino,

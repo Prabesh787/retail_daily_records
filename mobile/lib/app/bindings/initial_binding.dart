@@ -4,6 +4,7 @@ import '../data/providers/remote/api_client.dart';
 import '../data/providers/remote/rest_sync_api.dart';
 import '../data/providers/remote/sync_api.dart';
 import '../data/repositories/customer_repository.dart';
+import '../data/repositories/dashboard_repository.dart';
 import '../data/repositories/fiscal_year_repository.dart';
 import '../data/repositories/purchase_repository.dart';
 import '../data/repositories/sale_repository.dart';
@@ -32,6 +33,10 @@ class InitialBinding extends Bindings {
       fenix: true,
     );
     Get.lazyPut<SaleRepository>(SaleRepository.new, fenix: true);
+
+    // Composes the others rather than owning a table of its own; registered
+    // here so the dashboard binding has nothing to build but its controller.
+    Get.lazyPut<DashboardRepository>(DashboardRepository.new, fenix: true);
   }
 
   /// One HTTP client, shared by auth and sync.

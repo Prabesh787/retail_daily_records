@@ -7,14 +7,16 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../routes/app_pages.dart';
 import '../../../services/auth_service.dart';
+import '../../dashboard/widgets/sync_status_chip.dart';
+import '../controllers/more_controller.dart';
 
 /// Everything that does not earn a tab.
 ///
-/// Five tabs is the practical ceiling for a thumb-reachable bar, so the
-/// cheque register, customers, fiscal years and shop details live here. Rows
-/// that are not built yet are listed and disabled rather than hidden — the menu
-/// is also the map of what the app does.
-class MoreView extends StatelessWidget {
+/// Five tabs is the practical ceiling for a thumb-reachable bar, so the cheque
+/// register, customers, fiscal years and shop details live here — along with
+/// the two things every app needs somewhere and nowhere in particular: the
+/// theme, and the way out.
+class MoreView extends GetView<MoreController> {
   const MoreView({super.key});
 
   @override
@@ -43,7 +45,9 @@ class MoreView extends StatelessWidget {
                         style: AppTextStyles.title.copyWith(color: palette.ink),
                       ),
                       Text(
-                        auth.accountName.isEmpty ? 'Signed in' : auth.accountName,
+                        auth.accountName.isEmpty
+                            ? 'Signed in'
+                            : auth.accountName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.caption.copyWith(
@@ -53,6 +57,11 @@ class MoreView extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Where the sync state belongs: here and the dashboard are the
+                // two places someone goes to ask whether their records have
+                // actually left the phone. The chip reports nothing when there
+                // is no sync service, so it needs no guard here.
+                const SyncStatusChip(),
               ],
             ),
           ),
@@ -60,41 +69,76 @@ class MoreView extends StatelessWidget {
 
           const SectionHeader(title: 'MONEY'),
           AppCard.flush(
-            child: AppListRow(
-              leading: IconPlate(
-                icon: Icons.account_balance_wallet_rounded,
-                color: palette.pending,
-              ),
-              title: 'Cheque register',
-              subtitle: 'Cheques written but not yet cleared',
-              chevron: true,
-              onTap: () => Get.toNamed<void>(Routes.cheques),
+            child: Column(
+              children: [
+                AppListRow(
+                  leading: IconPlate(
+                    icon: Icons.account_balance_wallet_rounded,
+                    color: palette.pending,
+                  ),
+                  title: 'Cheque register',
+                  subtitle: 'Cheques written but not yet cleared',
+                  chevron: true,
+                  onTap: () => Get.toNamed<void>(Routes.cheques),
+                ),
+                const RowDivider(),
+                AppListRow(
+                  leading: IconPlate(
+                    icon: Icons.people_rounded,
+                    color: palette.brand,
+                  ),
+                  title: 'Customers',
+                  subtitle: 'The people you invoice',
+                  chevron: true,
+                  onTap: () => Get.toNamed<void>(Routes.customers),
+                ),
+              ],
             ),
           ),
           AppSizes.gapLg,
 
-          const SectionHeader(title: 'RECORDS'),
-          const AppCard.flush(
+          const SectionHeader(title: 'THIS SHOP'),
+          AppCard.flush(
             child: Column(
               children: [
-                _Pending(
-                  icon: Icons.people_outline_rounded,
-                  title: 'Customers',
-                  subtitle: 'Who owes the shop, and their ledgers',
-                ),
-                RowDivider(),
-                _Pending(
-                  icon: Icons.event_note_outlined,
-                  title: 'Fiscal years',
-                  subtitle: 'The year every record is filed under',
-                ),
-                RowDivider(),
-                _Pending(
-                  icon: Icons.storefront_outlined,
+                AppListRow(
+                  leading: IconPlate(
+                    icon: Icons.storefront_rounded,
+                    color: palette.brand,
+                  ),
                   title: 'Shop details',
                   subtitle: 'Name, PAN and address on your paperwork',
+                  chevron: true,
+                  onTap: () => Get.toNamed<void>(Routes.shop),
+                ),
+                const RowDivider(),
+                AppListRow(
+                  leading: IconPlate(
+                    icon: Icons.event_note_rounded,
+                    color: palette.brand,
+                  ),
+                  title: 'Fiscal years',
+                  subtitle: 'The year every record is filed under',
+                  chevron: true,
+                  onTap: () => Get.toNamed<void>(Routes.fiscalYears),
                 ),
               ],
+            ),
+          ),
+          AppSizes.gapLg,
+
+          const SectionHeader(title: 'APPEARANCE'),
+          AppCard(
+            child: Obx(
+              () => SegmentedControl<ThemeMode>(
+                segments: const [
+                  Segment(value: ThemeMode.light, label: 'Light'),
+                  Segment(value: ThemeMode.dark, label: 'Dark'),
+                  Segment(value: ThemeMode.system, label: 'System'),
+                ],
+                value: controller.themeMode.value,
+                onChanged: controller.setThemeMode,
+              ),
             ),
           ),
           AppSizes.gapLg,
@@ -102,46 +146,11 @@ class MoreView extends StatelessWidget {
           AppOutlinedButton(
             label: 'Sign out',
             icon: Icons.logout_rounded,
-            onPressed: () async {
-              final confirmed = await ConfirmDialog.show(
-                title: 'Sign out?',
-                message: 'Anything not yet synced stays on this device and '
-                    'will go up the next time you sign in.',
-                confirmLabel: 'Sign out',
-                isDestructive: true,
-              );
-              if (confirmed) await auth.signOut();
-            },
+            onPressed: controller.signOut,
           ),
           AppSizes.gapXl,
         ],
       ),
-    );
-  }
-}
-
-/// A destination that exists in the plan but not yet in the app. Shown so the
-/// menu stays an honest map, greyed so it does not promise a tap.
-class _Pending extends StatelessWidget {
-  const _Pending({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return AppListRow(
-      leading: IconPlate(icon: icon, color: palette.inkSubtle),
-      title: title,
-      subtitle: subtitle,
-      trailing: const [AppBadge(label: 'Soon', dot: false)],
     );
   }
 }
