@@ -224,10 +224,10 @@ class SaleItemDto {
 
   static Map<String, dynamic> toWire(SaleItem item) => item.toJson();
 
-  /// [fallbackOrder] is the line's position in the array, used when the server
-  /// sends no `sortOrder` — which it does not yet, since the Postgres schema
-  /// has no such column. Array order is the best available answer, and better
-  /// than letting the lines come back shuffled.
+  /// [fallbackOrder] is the line's position in the array, used when a row
+  /// arrives without a `sortOrder` — a sale recorded before the server had the
+  /// column, say. Array order is the best available answer, and better than
+  /// letting the lines come back shuffled.
   static SaleItem fromWire(
     Map<String, dynamic> json, {
     required String saleId,

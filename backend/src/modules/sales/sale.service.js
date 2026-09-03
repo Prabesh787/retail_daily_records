@@ -53,7 +53,7 @@ export function calculateSaleTotals(items, saleDiscount = 0) {
  *
  * @param {object} dto
  */
-function resolveTotals(dto) {
+export function resolveTotals(dto) {
   if (dto.saleType === SaleType.DETAILED) {
     return calculateSaleTotals(dto.items, dto.discount ?? 0);
   }
@@ -150,13 +150,16 @@ export const saleService = {
             discount,
             totalAmount,
             items: {
-              create: lines.map((line) => ({
+              // The order the lines arrived in is the order they were typed
+              // in, and it is the order the invoice has to print in.
+              create: lines.map((line, index) => ({
                 description: line.description,
                 quantity: line.quantity,
                 unit: line.unit,
                 unitPrice: line.unitPrice,
                 discount: line.discount ?? 0,
                 amount: line.amount,
+                sortOrder: index,
               })),
             },
             payments: {

@@ -78,9 +78,13 @@ class StorageService extends GetxService implements SyncCursorStore {
 
   // ---- Sync state ---------------------------------------------------------
 
-  /// Whether the user has turned sync on. Off means the app is local-only and
+  /// Whether the user has turned sync off. Off means the app is local-only and
   /// the UI says so plainly instead of showing a permanent "pending".
-  bool get syncEnabled => _box.read<bool>(StorageKeys.syncEnabled) ?? false;
+  ///
+  /// Defaults to on, because a build that has a server address was made to
+  /// reach it — [SyncService] still checks that separately, so a build without
+  /// one is local-only whatever this says.
+  bool get syncEnabled => _box.read<bool>(StorageKeys.syncEnabled) ?? true;
   set syncEnabled(bool value) => _box.write(StorageKeys.syncEnabled, value);
 
   @override

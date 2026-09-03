@@ -3,10 +3,13 @@ import '../../core/utils/nepali_date.dart';
 
 /// Tolerant readers for JSON coming off the wire.
 ///
-/// The backend is undecided, so its exact types are unknown: dates may arrive
-/// as epoch millis, epoch seconds or an ISO string; booleans as `true`, `1` or
-/// `"1"`; money as a number or a string. Parsing defensively here means a
-/// backend choice never turns into a crash in a DAO.
+/// The API's own types are narrow — dates are `YYYY-MM-DD`, money is a
+/// fixed-precision string, timestamps are epoch millis — but a row can also
+/// come from an older build, a hand-fixed record or a future change to the
+/// server. So dates are read whether they arrive as millis, seconds or an ISO
+/// string, booleans as `true`, `1` or `"1"`, money as a number or a string.
+/// Parsing defensively here means a change on the wire never turns into a
+/// crash in a DAO.
 class WireCodec {
   WireCodec._();
 

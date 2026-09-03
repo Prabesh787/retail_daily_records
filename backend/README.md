@@ -21,9 +21,10 @@ deliberately left for the next stage. There is no frontend yet.
 7. [Project structure](#project-structure)
 8. [Database schema](#database-schema)
 9. [API](#api)
-10. [Conventions](#conventions)
-11. [What is intentionally not here](#what-is-intentionally-not-here)
-12. [Next stage](#next-stage)
+10. [Offline sync](#offline-sync)
+11. [Conventions](#conventions)
+12. [What is intentionally not here](#what-is-intentionally-not-here)
+13. [Next stage](#next-stage)
 
 ---
 
@@ -216,7 +217,14 @@ npm run lint:fix       # ESLint with autofix
 npm run format         # Prettier, write
 npm run format:check   # Prettier, check only
 npm run check          # schema validate + lint + format check
+npm run sync:check     # exercises /sync against the database, then cleans up
 ```
+
+`sync:check` is the one thing here that touches data. The merge rules behind
+`/sync` involve triggers, transactions, constraint failures and a keyset
+cursor, none of which a mock can prove, so it pushes real documents through
+the service, asserts every rule the module claims, and removes what it made.
+It refuses to run when `NODE_ENV=production`.
 
 ---
 
@@ -259,6 +267,7 @@ src/
     customers/
     sales/
     attachments/
+    sync/                    Push/pull reconciliation for the offline app
 
   routes/index.js            Mounts every module under API_PREFIX
 ```
@@ -312,6 +321,7 @@ attachments ──── polymorphic: PURCHASE | SUPPLIER_PAYMENT | SALE
 | `sale_items`        | Free-text invoice lines, `DETAILED` sales only             |
 | `sale_payments`     | Cash / bank / cheque / credit split on one sale            |
 | `attachments`       | Scanned evidence for any of the above                      |
+| `sync_tombstones`   | What a deleted row leaves behind, so clients hear about it |
 
 ### Enums
 
@@ -348,6 +358,9 @@ An unpaid purchase is simply a purchase with no payment rows against it —
 `supplier_payments.cheque_date`, `sales.sale_date`, `sales.fiscal_year_id`,
 `sales.customer_id`, plus foreign-key and `attachments (entity_type, entity_id)`
 lookup indexes.
+
+Every replicated table also carries `(updated_at, id)`, which is the keyset the
+sync pull cursor pages on.
 
 ### Dates: AD and BS side by side
 
@@ -427,6 +440,8 @@ Everything is mounted under `API_PREFIX` (default `/api/v1`).
 | `DELETE` | `/attachments/:id`                   | done   |
 | `GET`    | `/reports/dashboard`                 | done   |
 | `GET`    | `/reports/supplier-outstanding`      | done   |
+| `POST`   | `/sync/push`                         | done   |
+| `GET`    | `/sync/pull`                         | done   |
 
 **done** = implemented and usable. Nothing returns `501` any more.
 
@@ -517,6 +532,88 @@ satisfies `src/common/storage/file-storage.interface.js` and adding a case to
 `getFileStorage()` — no table, no column and no service signature changes.
 Each row also records the `storage_driver` that wrote it, so files uploaded
 before a switch stay resolvable afterwards.
+
+---
+
+## Offline sync
+
+The mobile app keeps a complete SQLite copy of the shop's books and is fully
+usable with no signal at all. `src/modules/sync` is how the two copies meet.
+It is not a seventh way to write a bill — it is the same tables, merged.
+
+### The two calls
+
+```
+POST /sync/push
+  { device_id, operations: [ { entity, entity_id, operation, updated_at, payload } ] }
+  -> { server_time, results: [ { entity_id, status, server_row?, message?, retryable? } ] }
+
+GET  /sync/pull?entity=suppliers&cursor=<opaque>&limit=200
+  -> { rows, next_cursor, has_more, server_time }
+```
+
+`status` is `accepted`, `conflict` or `error`, one per operation and in the
+same order. A rejected row does not fail the batch: the client needs the other
+verdicts, and it is the only way one bad record can be reported instead of
+blocking everything queued behind it.
+
+Six entities replicate, in dependency order — `fiscal_years`, `suppliers`,
+`customers`, `purchases`, `supplier_payments`, `sales`. A sale travels whole,
+with its lines and settlement inside its own payload; they are not entities on
+the wire, because a header that arrived without its lines would be an
+accounting error rather than a partial success.
+
+Payloads use the same camelCase field names, `YYYY-MM-DD` dates and
+fixed-precision money strings as every other endpoint. Only the four sync keys
+are snake_case (`created_at`, `updated_at`, `is_deleted`, `device_id`), because
+the app's sync engine reads them straight off a row.
+
+### The three rules
+
+- **The client names the row.** Ids are uuids generated on the device and a
+  push is an upsert by that id. A bill written with no signal is addressable
+  immediately, and its payments can reference it before the server has heard of
+  it. Pushing the same operation twice is recognised by its timestamp and
+  changes nothing.
+- **Newest wins, on the client's clock.** Every replicated table carries
+  `sync_updated_at` — epoch millis as stated by whoever last wrote the row.
+  An older change comes back as `conflict` carrying the server's copy, so the
+  device can settle it without a second round trip. It is a separate column
+  from `updated_at` precisely so a phone's clock is only ever compared against
+  another phone's; comparing it against the server's would make every push from
+  a device that runs slow look stale forever. `updated_at` stays the server's
+  clock and is what the pull cursor pages on.
+- **Deletes leave a trace.** They land in `sync_tombstones` and come back in
+  the pull stream as `is_deleted: true`. A row that simply vanished would be
+  pushed straight back by the next device that had not heard.
+
+### What the database does on its own
+
+Three triggers, added by `20260903120000_sync_engine`, so that the web API, the
+seed script and a hand-run `UPDATE` all leave a synced table in a state the
+phone can reconcile with:
+
+| Trigger            | Does                                                                          |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `*_sync_stamp`     | Stamps `sync_updated_at` with server time unless the writer supplied its own   |
+| `*_sync_tombstone` | Records the tombstone on every delete, the cascade from a sale included        |
+| `*_sync_untombstone` | Clears it again when a row with that id is created                           |
+
+Deleting through the existing REST endpoints therefore reaches the app too;
+nothing had to change in those modules.
+
+### Known limits
+
+- A pull stops two seconds short of "now". A row's `updated_at` is set when the
+  statement runs but only becomes visible when the transaction commits, and
+  without that lag a pull reading between the two could move its cursor past a
+  row it had not yet seen. Against a sync that runs every fifteen minutes the
+  staleness is not observable.
+- Last-write-wins is only as good as the clocks involved. A device set a day
+  ahead wins every merge until the world catches up. The cursor is deliberately
+  on the server's clock so such a device cannot also strand the pull stream.
+- Deleting a record the server still has documents against is refused with a
+  reason rather than cascaded — the same rule the REST endpoints apply.
 
 ---
 

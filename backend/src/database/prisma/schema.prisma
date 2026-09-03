@@ -147,11 +147,29 @@ model FiscalYear {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  /// Sync bookkeeping. Every table the mobile app replicates carries this
+  /// pair; see `src/modules/sync` and the `20260903120000_sync_engine`
+  /// migration for why they exist and which triggers maintain them.
+  ///
+  /// `syncUpdatedAt` is epoch millis **as stated by whoever last wrote the
+  /// row** - a phone's own clock when the write came from the phone, server
+  /// time otherwise. It is the last-write-wins tiebreaker, and it is a
+  /// separate column from `updatedAt` precisely so that a client's clock is
+  /// only ever compared against another client's. `updatedAt` stays the
+  /// server's clock and is what the pull cursor pages on.
+  ///
+  /// `deviceId` names the client that last wrote, so a device can recognise
+  /// its own change coming back and not overwrite an edit it made while the
+  /// push was in flight.
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
   purchases        Purchase[]
   supplierPayments SupplierPayment[]
   sales            Sale[]
 
   @@index([isActive])
+  @@index([updatedAt, id])
   @@map("fiscal_years")
 }
 
@@ -177,11 +195,16 @@ model Supplier {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  /// See FiscalYear for what these two are and which triggers maintain them.
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
   purchases Purchase[]
   payments  SupplierPayment[]
 
   @@index([name])
   @@index([isActive])
+  @@index([updatedAt, id])
   @@map("suppliers")
 }
 
@@ -199,10 +222,15 @@ model Customer {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  /// See FiscalYear for what these two are and which triggers maintain them.
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
   sales Sale[]
 
   @@index([name])
   @@index([phone])
+  @@index([updatedAt, id])
   @@map("customers")
 }
 
@@ -224,6 +252,10 @@ model Purchase {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  /// See FiscalYear for what these two are and which triggers maintain them.
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
   fiscalYear FiscalYear        @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
   supplier   Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   createdBy  User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -236,6 +268,7 @@ model Purchase {
   @@index([billDate])
   @@index([fiscalYearId])
   @@index([createdById])
+  @@index([updatedAt, id])
   @@map("purchases")
 }
 
@@ -278,6 +311,10 @@ model SupplierPayment {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  /// See FiscalYear for what these two are and which triggers maintain them.
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
   fiscalYear FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
   supplier   Supplier   @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   purchase   Purchase?  @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
@@ -291,6 +328,7 @@ model SupplierPayment {
   @@index([purchaseId])
   @@index([fiscalYearId])
   @@index([createdById])
+  @@index([updatedAt, id])
   @@map("supplier_payments")
 }
 
@@ -320,6 +358,15 @@ model Sale {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  /// See FiscalYear for what these two are and which triggers maintain them.
+  ///
+  /// A sale's lines and settlement travel inside its own payload on the wire
+  /// rather than syncing as entities of their own, so they carry no sync
+  /// columns: a header that arrived without its lines would be an accounting
+  /// error, not a partial success.
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
   fiscalYear FiscalYear    @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
   customer   Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
   createdBy  User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -334,6 +381,7 @@ model Sale {
   @@index([customerId])
   @@index([saleType])
   @@index([createdById])
+  @@index([updatedAt, id])
   @@map("sales")
 }
 
@@ -351,6 +399,10 @@ model SaleItem {
   discount    Decimal  @default(0) @db.Decimal(14, 2)
   /// Always recomputed server-side as quantity * unitPrice - discount.
   amount      Decimal  @db.Decimal(14, 2)
+  /// Position on the invoice, as the shopkeeper arranged it. Insertion time is
+  /// not a substitute: lines written in one statement share a timestamp, and a
+  /// client that reordered them would see them shuffle back on the next sync.
+  sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -412,4 +464,38 @@ model Attachment {
   @@index([documentType])
   @@index([uploadedById])
   @@map("attachments")
+}
+
+// ---------------------------------------------------------------------------
+// Sync tombstones - the trace a deleted row leaves behind
+// ---------------------------------------------------------------------------
+
+/// A row that is simply gone is invisible to a client that was offline when it
+/// went, and that client would push it straight back on its next sync. So
+/// every delete on a replicated table leaves a tombstone, and `GET /sync/pull`
+/// hands them back interleaved with the live rows as `is_deleted: true`.
+///
+/// Written by an AFTER DELETE trigger rather than by the services, so the web
+/// API, the seed script and a hand-run DELETE all leave the same trace; the
+/// sync endpoint then restates the row with the deleting device's own clock.
+/// An INSERT of the same id clears it again - two devices working offline can
+/// legitimately delete and recreate the same record.
+model SyncTombstone {
+  entity   String @db.VarChar(40)
+  entityId String @map("entity_id") @db.Uuid
+
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
+  /// When the row went, in epoch millis, and the key a pull pages on.
+  ///
+  /// An integer rather than a timestamp because this value is written by a
+  /// trigger and read by Prisma, and those two do not agree about what a
+  /// `timestamptz` means on a connection whose session timezone is not UTC.
+  /// See the `20260903120000_sync_engine` migration.
+  deletedAtMs BigInt @default(0) @map("deleted_at_ms")
+
+  @@id([entity, entityId])
+  @@index([entity, deletedAtMs, entityId])
+  @@map("sync_tombstones")
 }
