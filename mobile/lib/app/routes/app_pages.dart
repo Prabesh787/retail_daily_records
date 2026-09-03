@@ -2,6 +2,9 @@ import 'package:get/get.dart';
 
 import '../modules/auth/bindings/auth_binding.dart';
 import '../modules/auth/views/login_view.dart';
+import '../modules/customers/bindings/customers_binding.dart';
+import '../modules/customers/views/customer_form_view.dart';
+import '../modules/customers/views/customers_view.dart';
 import '../modules/home/bindings/home_binding.dart';
 import '../modules/home/views/home_view.dart';
 import '../modules/payments/bindings/payments_binding.dart';
@@ -15,6 +18,9 @@ import '../modules/sales/bindings/sales_binding.dart';
 import '../modules/sales/views/sale_day_view.dart';
 import '../modules/sales/views/sale_detail_view.dart';
 import '../modules/sales/views/sale_form_view.dart';
+import '../modules/settings/bindings/settings_binding.dart';
+import '../modules/settings/views/fiscal_years_view.dart';
+import '../modules/settings/views/shop_view.dart';
 import '../modules/splash/bindings/splash_binding.dart';
 import '../modules/splash/views/splash_view.dart';
 import '../modules/suppliers/bindings/suppliers_binding.dart';
@@ -137,6 +143,33 @@ class AppPages {
       name: Routes.saleDay,
       page: () => const SaleDayView(),
       binding: SaleDayBinding(),
+      middlewares: _protected,
+    ),
+
+    // Customers and settings. All reached from the More tab — a shop selling
+    // over a counter for cash never needs any of them.
+    GetPage(
+      name: Routes.customers,
+      page: () => const CustomersView(),
+      binding: CustomersBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.customerForm,
+      page: () => const CustomerFormView(),
+      binding: CustomerFormBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.fiscalYears,
+      page: () => const FiscalYearsView(),
+      binding: FiscalYearsBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.shop,
+      page: () => const ShopView(),
+      binding: ShopBinding(),
       middlewares: _protected,
     ),
   ];

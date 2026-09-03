@@ -28,8 +28,17 @@ class DatabaseService extends GetxService {
 
   late final SyncQueueDao syncQueue;
 
-  Future<DatabaseService> init() async {
-    db = await DbHelper.instance.open();
+  Future<DatabaseService> init() async =>
+      attach(await DbHelper.instance.open());
+
+  /// Wires the DAOs onto an already-open database.
+  ///
+  /// Split out from [init] so tests can hand in an in-memory database built
+  /// from the same [DbHelper.schemaStatements] the app ships. The alternative —
+  /// a mock of every DAO — would prove only that the mocks agree with each
+  /// other, which is not a fact about this app.
+  DatabaseService attach(Database database) {
+    db = database;
 
     fiscalYears = FiscalYearDao(db);
     suppliers = SupplierDao(db);

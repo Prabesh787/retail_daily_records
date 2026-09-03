@@ -17,8 +17,8 @@ differ deliberately it is called out.
 | Sync engine, outbox, conflict rules | Complete, 99 tests. |
 | Theme, palette, widget kit | Complete, 25 tests. |
 | Change bus, screen scaffold, loader base | Complete, 8 tests. |
-| Screens | 18 of 23 — everything but the dashboard, customers, fiscal years and shop details. |
-| Routes | 14 of 22 registered. The four tab lists are shell tabs, not routes. |
+| Screens | 22 of 23 — everything but the dashboard. |
+| Routes | 18 of 22 registered. The four tab lists are shell tabs, not routes. |
 
 Three pieces were added for the screens to share, and everything after Phase 1
 is expected to use them:
@@ -172,7 +172,7 @@ day book. `SaleRow` already does this; the day totals must agree.
 **Done when:** a day's takings equals the sum of the sales listed under it —
 there is no separate "day's takings" record anywhere in the system, by design.
 
-### Phase 5 — Customers and settings
+### Phase 5 — Customers and settings ✅ BUILT
 
 Small screens, and the app is not shippable without them: the More tab is
 currently the only route to signing out, and sign-out is a temporary button in
@@ -389,3 +389,70 @@ So: a widget that reads `controller.something.value` either **wraps its own
 content in `Obx`**, or **takes the value as a plain constructor argument** read
 at a tracked call site. Passing just the controller and reading observables
 inside is the shape to avoid.
+
+## The screen test harness
+
+`test/helpers/test_app.dart` mounts a real screen against a real database.
+Nothing in it is a mock: the schema is `DbHelper.schemaStatements`, the
+repositories are the real ones, and the storage service really runs — a screen
+test whose data layer is fake mostly proves the fake works.
+
+It exists because the Obx bug above shipped through a clean analyze, 165 green
+tests and a successful APK build. Nothing had ever *run* a screen.
+
+Five things were needed to make widget tests work against this stack, and each
+was invisible until the one before it was fixed:
+
+1. **path_provider has no implementation under `flutter test`**, and `GetStorage`
+   asks it where to write. Mocked to a scratch directory.
+2. **`pumpAndSettle` never returns**, because the loading skeleton shimmers on
+   a `..repeat()` controller and there is always another frame scheduled. Use
+   the bounded `settle()` helper instead.
+3. **Real I/O does not progress inside the fake-async zone** `testWidgets` runs
+   in. Both `settle()` and `seed()` step out through `runAsync`; a repository
+   write called directly from a test body simply hangs.
+4. **`Get.toNamed` completes when a route is *popped***, not when it is pushed,
+   so awaiting it waits forever for the screen under test.
+5. **`Get.deleteAll` leaves GetX's routing state behind.** The second test to
+   navigate to the same route name gets a no-op, the screen never mounts, and
+   every finder returns empty — which looks exactly like a broken screen.
+   `Get.reset()` is what actually clears it.
+
+Each screen is mounted empty and populated, because those are different code
+paths and the empty one is the one nobody tries by hand.
+
+## Phase 5 as built
+
+Customers, fiscal years, shop details, and a More tab that is now a real screen
+rather than a menu of promises. All three pieces of plumbing the phase owed are
+done:
+
+**The theme is a three-way choice and it applies immediately.** The stored
+preference moved from a bool to the mode's name, because "dark: false" cannot
+tell apart *chose light* from *never chose* — and those want different behaviour
+when the phone switches to dark at sunset. Reads still accept the old boolean,
+so an existing install keeps what it had. `Get.changeThemeMode` means the choice
+lands under the user's finger rather than on next launch.
+
+**`SyncStatusChip` is mounted** on the More header, and only when a sync service
+is actually registered — the app runs local-only quite happily, and a status
+chip in that state reports on something nobody switched on.
+
+**The temporary sign-out is gone** from the tab placeholder now that More has a
+real one, with a confirmation that says what happens to unsynced records.
+
+Two things worth knowing about the screens themselves:
+
+* **The customer form is also the customer's page.** A customer carries no
+  derived balance — unlike a supplier, whose whole screen is arithmetic — so a
+  separate read-only view would be the same six fields with an edit button on
+  top. What they have bought appears above the fields when there is a history.
+* **Fiscal years warns when no year covers today**, because that is the state in
+  which every form in the app quietly refuses to save. The new-year sheet
+  defaults to the Nepali year containing today and ends its range the day before
+  the next one opens, so two years meet with no gap and no overlap.
+
+**Shop details saves locally first and unconditionally**, then tries the server.
+A failed push is reported as "saved on this device" rather than an error,
+because the change *was* kept — an offline-first app whose shop cannot rename
+itself offline would be a strange thing.

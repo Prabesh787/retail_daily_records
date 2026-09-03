@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:uuid/uuid.dart';
@@ -54,8 +55,26 @@ class StorageService extends GetxService implements SyncCursorStore {
     CurrencyFormatter.symbol = value;
   }
 
-  bool get isDarkMode => _box.read<bool>(StorageKeys.themeMode) ?? false;
-  set isDarkMode(bool value) => _box.write(StorageKeys.themeMode, value);
+  /// Light, dark, or follow the phone.
+  ///
+  /// Stored as the mode's name rather than a bool, because "dark: false" cannot
+  /// tell apart *chose light* from *never chose* — and those two want different
+  /// behaviour when the phone switches to dark at sunset.
+  ///
+  /// Reads tolerate the old boolean this replaced, so an existing install keeps
+  /// the preference it already had instead of silently reverting to system.
+  ThemeMode get themeMode {
+    final raw = _box.read<dynamic>(StorageKeys.themeMode);
+    return switch (raw) {
+      'light' => ThemeMode.light,
+      'dark' || true => ThemeMode.dark,
+      false => ThemeMode.light,
+      _ => ThemeMode.system,
+    };
+  }
+
+  set themeMode(ThemeMode value) =>
+      _box.write(StorageKeys.themeMode, value.name);
 
   // ---- Sync state ---------------------------------------------------------
 

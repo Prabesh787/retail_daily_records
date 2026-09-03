@@ -114,15 +114,7 @@ class _Placeholder extends StatelessWidget {
               style: AppTextStyles.caption.copyWith(color: palette.inkSubtle),
             ),
           ),
-          AppSizes.gapSm,
-          // Temporary: the real sign-out belongs on the More tab. It is here so
-          // the login flow can be exercised before that screen exists.
-          IconButton(
-            tooltip: 'Sign out',
-            icon: const Icon(Icons.logout_rounded, size: 20),
-            onPressed: () => auth.signOut(),
-          ),
-          AppSizes.gapSm,
+          AppSizes.gapMd,
         ],
       ),
       body: Center(
