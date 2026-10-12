@@ -47,6 +47,17 @@ const wireBoolean = (fallback) =>
     return value;
   }, z.boolean().default(fallback));
 
+/**
+ * [wireBoolean] for a field added after the app first shipped. Absent stays
+ * absent rather than taking a default, so an older build that has never heard
+ * of the field cannot reset it with every push it makes.
+ */
+const optionalWireBoolean = z.preprocess((value) => {
+  if (typeof value === 'string') return value === 'true' || value === '1';
+  if (typeof value === 'number') return value !== 0;
+  return value ?? undefined;
+}, z.boolean().optional());
+
 /** Entities that replicate, in dependency order: parents before children. */
 export const syncEntityNames = Object.freeze([
   'fiscal_years',
@@ -107,6 +118,7 @@ const supplierPayloadSchema = z.object({
   pan: optionalText(30),
   openingBalance: moneyAmount().default(0),
   isActive: wireBoolean(true),
+  isTop: optionalWireBoolean,
   remarks: optionalText(2000),
   ...syncMetaShape,
 });

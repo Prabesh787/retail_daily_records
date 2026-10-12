@@ -72,6 +72,9 @@ const definitions = {
       pan: payload.pan,
       openingBalance: payload.openingBalance,
       isActive: payload.isActive,
+      // Undefined from a build that predates the flag, which Prisma leaves
+      // untouched on update and defaults to false on create.
+      isTop: payload.isTop,
       remarks: payload.remarks,
     }),
   },
