@@ -2,9 +2,10 @@ import '../../sync/sync_models.dart';
 
 /// The entire surface the app needs from a backend.
 ///
-/// Everything above this line is written once. Whether the server ends up on
-/// Postgres, MySQL or Mongo is invisible here — only the JSON contract matters,
-/// so a backend decision that has not been made yet cannot block the app.
+/// Everything above this line is written once. Whether the server keeps its
+/// records in Postgres, MySQL or Mongo is invisible here — only the JSON
+/// contract matters, which is what lets the app be built and used before, and
+/// independently of, whatever is on the other end.
 abstract class SyncApi {
   /// False until a real endpoint is wired; the UI then shows "Local only"
   /// instead of pretending a sync is pending.
@@ -22,9 +23,9 @@ abstract class SyncApi {
   });
 }
 
-/// Default implementation: the app is fully usable, nothing leaves the device.
-/// Swapped for [RestSyncApi] in one line of [InitialBinding] once the backend
-/// team publishes their endpoints.
+/// Used when the build has no server address: the app is fully usable and
+/// nothing leaves the device. [InitialBinding] picks [RestSyncApi] instead as
+/// soon as `API_BASE_URL` is set.
 class NoopSyncApi implements SyncApi {
   const NoopSyncApi();
 

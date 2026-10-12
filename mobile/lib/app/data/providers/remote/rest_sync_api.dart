@@ -2,9 +2,9 @@ import '../../sync/sync_models.dart';
 import 'api_client.dart';
 import 'sync_api.dart';
 
-/// The adapter to write once the backend team publishes their endpoints.
+/// The adapter onto the Express backend's `/sync` module.
 ///
-/// Contract handed to them (implementable on any database):
+/// The contract, which that module implements:
 ///
 ///   POST /sync/push
 ///     { "device_id": "...", "operations": [ { entity, entity_id,
@@ -12,15 +12,17 @@ import 'sync_api.dart';
 ///     -> { "server_time": 0, "results": [ { entity_id, status:
 ///          accepted|conflict|error, server_row?, message? } ] }
 ///
-///   `GET /sync/pull?entity=bills&cursor=<opaque>&limit=200`
+///   `GET /sync/pull?entity=suppliers&cursor=<opaque>&limit=200`
 ///     -> { "rows": [...], "next_cursor": "...", "has_more": false,
 ///          "server_time": 0 }
 ///
-/// Four things the server must honour:
-///   1. Accept client-generated UUIDs as primary keys (never reassign ids).
-///   2. Upsert by that id, idempotently — a retried push must not duplicate.
-///   3. Soft-delete only; deleted rows still come back in pull as tombstones.
-///   4. Return rows ordered by updated_at, and echo an opaque next_cursor.
+/// Four things the server honours, and has to:
+///   1. Client-generated UUIDs are the primary keys; ids are never reassigned.
+///   2. Upsert by that id, idempotently — a retried push does not duplicate.
+///   3. Deletions leave a tombstone, which comes back in pull as a row with
+///      `is_deleted: true`.
+///   4. Rows are ordered by their change time, with an opaque cursor echoed
+///      back as `next_cursor`.
 class RestSyncApi implements SyncApi {
   RestSyncApi(this._client, {this.deviceId});
 
@@ -42,7 +44,7 @@ class RestSyncApi implements SyncApi {
         'operations': operations.map((e) => e.toJson()).toList(),
       },
     );
-    return PushResult.fromJson(json);
+    return PushResult.fromJson(_unwrap(json));
   }
 
   @override
@@ -60,6 +62,14 @@ class RestSyncApi implements SyncApi {
         'device_id': ?deviceId,
       },
     );
-    return PullResult.fromJson(json);
+    return PullResult.fromJson(_unwrap(json));
+  }
+
+  /// The API wraps every response in `{ success, message, data }`, exactly as
+  /// it does for auth. Unwrapping here keeps the envelope out of the sync
+  /// models, which are written against the contract above and nothing else.
+  Map<String, dynamic> _unwrap(Map<String, dynamic> json) {
+    final data = json['data'];
+    return data is Map<String, dynamic> ? data : json;
   }
 }

@@ -49,7 +49,7 @@ export const saleRepository = {
       where: { id },
       include: {
         ...listInclude,
-        items: { orderBy: { createdAt: 'asc' } },
+        items: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
         payments: { orderBy: { createdAt: 'asc' } },
       },
     });
@@ -78,7 +78,11 @@ export const saleRepository = {
   findByDate(date, db = prisma) {
     return db.sale.findMany({
       where: { saleDate: date },
-      include: { ...listInclude, items: { orderBy: { createdAt: 'asc' } }, payments: true },
+      include: {
+        ...listInclude,
+        items: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
+        payments: true,
+      },
       orderBy: { createdAt: 'asc' },
     });
   },

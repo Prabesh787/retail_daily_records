@@ -13,7 +13,7 @@ import {
 const paymentModeEnum = z.enum(Object.values(SupplierPaymentMode));
 const paymentStatusEnum = z.enum(Object.values(PaymentStatus));
 
-const basePaymentShape = {
+export const basePaymentShape = {
   /** Optional - falls back to the active fiscal year. */
   fiscalYearId: z.uuid().optional(),
   supplierId: z.uuid('A supplier is required'),
@@ -50,7 +50,7 @@ const basePaymentShape = {
  *  - Cash defaults to CLEARED; a cheque with no explicit status defaults to
  *    ISSUED (applied in the service, not here, so the default stays in one place).
  */
-function applyPaymentRules(data, ctx) {
+export function applyPaymentRules(data, ctx) {
   const status =
     data.status ?? (data.paymentMode === SupplierPaymentMode.CHEQUE ? 'ISSUED' : 'CLEARED');
 

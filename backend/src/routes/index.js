@@ -10,6 +10,7 @@ import { customerRoutes } from '../modules/customers/customer.routes.js';
 import { saleRoutes } from '../modules/sales/sale.routes.js';
 import { attachmentRoutes } from '../modules/attachments/attachment.routes.js';
 import { reportRoutes } from '../modules/reports/report.routes.js';
+import { syncRoutes } from '../modules/sync/sync.routes.js';
 
 /**
  * Every module mounts under the versioned prefix (default `/api/v1`).
@@ -43,3 +44,7 @@ apiRouter.use('/customers', customerRoutes);
 apiRouter.use('/sales', saleRoutes);
 apiRouter.use('/attachments', attachmentRoutes);
 apiRouter.use('/reports', reportRoutes);
+
+// Reconciliation for the offline mobile app. Not a seventh way to write a
+// bill - it is the same tables, merged rather than replaced. See modules/sync.
+apiRouter.use('/sync', syncRoutes);
