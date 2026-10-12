@@ -11,4 +11,5 @@ export 'balance_card.dart';
 export 'date_range_sheet.dart';
 export 'detail_list.dart';
 export 'rows.dart';
+export 'scan_viewer.dart';
 export 'status_badge.dart';

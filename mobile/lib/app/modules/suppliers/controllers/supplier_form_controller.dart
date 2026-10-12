@@ -28,6 +28,7 @@ class SupplierFormController extends GetxController {
   final TextEditingController remarks = TextEditingController();
 
   final RxBool isActive = true.obs;
+  final RxBool isTop = false.obs;
   final RxBool isLoading = false.obs;
   final RxBool isSaving = false.obs;
   final RxBool canDelete = false.obs;
@@ -68,6 +69,7 @@ class SupplierFormController extends GetxController {
       pan.text = supplier.pan ?? '';
       remarks.text = supplier.remarks ?? '';
       isActive.value = supplier.isActive;
+      isTop.value = supplier.isTop;
       openingBalance.text = supplier.openingBalance.isZero
           ? ''
           : supplier.openingBalance.toWire();
@@ -108,6 +110,7 @@ class SupplierFormController extends GetxController {
         openingBalance:
             Money.tryParse(openingBalance.text) ?? Money.zero,
         isActive: isActive.value,
+        isTop: isTop.value,
         remarks: _trimmed(remarks),
         // Sync status and device id are stamped by the repository — it is the
         // layer that knows the write is happening, so setting them here would

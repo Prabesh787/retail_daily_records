@@ -20,6 +20,10 @@ class DbTables {
   static const String saleItem = 'sale_items';
   static const String salePayment = 'sale_payments';
 
+  /// Scans of the paper behind a record. Not in [syncable]: files go up as
+  /// multipart uploads after their parent has synced, not through the queue.
+  static const String attachment = 'attachments';
+
   static const String syncQueue = 'sync_queue';
 
   /// Tables the sync engine walks, and the keys its pull cursors are stored

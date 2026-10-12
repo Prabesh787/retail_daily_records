@@ -3,8 +3,13 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
+import '../core/constants/db_constants.dart';
 import '../data/enums/sync_status.dart';
+import '../data/providers/remote/api_client.dart';
+import '../data/providers/remote/attachment_api.dart';
 import '../data/providers/remote/sync_api.dart';
+import '../data/repositories/attachment_repository.dart';
+import '../data/sync/attachment_uploader.dart';
 import '../data/sync/conflict_resolver.dart';
 import '../data/sync/entity_syncer.dart';
 import '../data/sync/sync_engine.dart';
@@ -29,6 +34,7 @@ class SyncService extends GetxService with WidgetsBindingObserver {
   static SyncService get to => Get.find();
 
   late final SyncEngine _engine;
+  late final AttachmentUploader _uploader;
   late final DatabaseService _db;
   late final StorageService _storage;
   late final ConnectivityService _connectivity;
@@ -60,6 +66,12 @@ class SyncService extends GetxService with WidgetsBindingObserver {
           Get.find<DataChangeService>().publish([entity]);
         }
       },
+    );
+
+    _uploader = AttachmentUploader(
+      dao: _db.attachments,
+      api: AttachmentApi(Get.find<ApiClient>()),
+      fileFor: AttachmentRepository.fileFor,
     );
 
     await refreshCounts();
@@ -94,6 +106,7 @@ class SyncService extends GetxService with WidgetsBindingObserver {
     );
 
     final report = await _engine.sync();
+    await _uploadAttachments();
     await refreshCounts();
 
     state.value = state.value.copyWith(
@@ -103,6 +116,20 @@ class SyncService extends GetxService with WidgetsBindingObserver {
       clearError: report.isSuccess,
     );
     return report;
+  }
+
+  /// Scans go up after the push, which is what puts their bills on the server
+  /// for them to hang off. A failure here never fails the sync: the records
+  /// themselves are delivered, and the scans try again next time.
+  Future<void> _uploadAttachments() async {
+    try {
+      final changed = await _uploader.run();
+      if (changed > 0 && Get.isRegistered<DataChangeService>()) {
+        Get.find<DataChangeService>().publish([DbTables.attachment]);
+      }
+    } catch (_) {
+      // Logged by the uploader; nothing for the sync chip to show.
+    }
   }
 
   /// Re-reads the outbox so the chip's pending count is accurate after a

@@ -96,6 +96,7 @@ void main() {
           DbTables.sale,
           DbTables.saleItem,
           DbTables.salePayment,
+          DbTables.attachment,
           DbTables.syncQueue,
         ]),
       );

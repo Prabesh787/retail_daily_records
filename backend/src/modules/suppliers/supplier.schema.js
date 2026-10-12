@@ -24,6 +24,8 @@ export const createSupplierSchema = z.object({
    * live. It seeds the derived outstanding figure; it is never a running total.
    */
   openingBalance: moneyAmount().default(0),
+  /** Pinned above the other suppliers in every list. */
+  isTop: z.boolean().default(false),
   remarks: optionalText(2000),
 });
 

@@ -39,6 +39,20 @@ class SupplierDetailView extends GetView<SupplierDetailController> {
         actions: [
           if (statement != null)
             IconButton(
+              tooltip: statement.supplier.isTop
+                  ? 'Remove from top suppliers'
+                  : 'Mark as top supplier',
+              icon: Icon(
+                statement.supplier.isTop
+                    ? Icons.star_rounded
+                    : Icons.star_outline_rounded,
+                size: 22,
+                color: statement.supplier.isTop ? Colors.amber.shade600 : null,
+              ),
+              onPressed: controller.toggleTop,
+            ),
+          if (statement != null)
+            IconButton(
               tooltip: 'Edit supplier',
               icon: const Icon(Icons.edit_outlined, size: 20),
               onPressed: controller.edit,

@@ -23,7 +23,7 @@ function buildWhere(query) {
 
 export const supplierRepository = {
   findMany(query, skip, take, db = prisma) {
-    return db.supplier.findMany({ where: buildWhere(query), orderBy: { name: 'asc' }, skip, take });
+    return db.supplier.findMany({ where: buildWhere(query), orderBy: [{ isTop: 'desc' }, { name: 'asc' }], skip, take });
   },
 
   count(query, db = prisma) {

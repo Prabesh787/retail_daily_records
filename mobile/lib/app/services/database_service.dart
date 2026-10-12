@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../data/providers/local/attachment_dao.dart';
 import '../data/providers/local/customer_dao.dart';
 import '../data/providers/local/db_helper.dart';
 import '../data/providers/local/fiscal_year_dao.dart';
@@ -25,6 +26,7 @@ class DatabaseService extends GetxService {
   late final PurchaseDao purchases;
   late final SupplierPaymentDao supplierPayments;
   late final SaleDao sales;
+  late final AttachmentDao attachments;
 
   late final SyncQueueDao syncQueue;
 
@@ -46,6 +48,7 @@ class DatabaseService extends GetxService {
     purchases = PurchaseDao(db);
     supplierPayments = SupplierPaymentDao(db);
     sales = SaleDao(db);
+    attachments = AttachmentDao(db);
 
     syncQueue = SyncQueueDao(db);
     return this;

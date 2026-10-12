@@ -71,6 +71,41 @@ class ApiClient {
     return _guard(() => _dio.patch<dynamic>(path, data: body));
   }
 
+  Future<Map<String, dynamic>> delete(String path) async {
+    return _guard(() => _dio.delete<dynamic>(path));
+  }
+
+  /// A multipart POST carrying one file under [fileField] plus text [fields].
+  ///
+  /// [mimeType] is sent as the part's content type. It has to be: the server
+  /// filters uploads on it, and Dio's default of `application/octet-stream`
+  /// would be refused.
+  Future<Map<String, dynamic>> upload(
+    String path, {
+    required String filePath,
+    required String fileName,
+    required String mimeType,
+    Map<String, String> fields = const {},
+    String fileField = 'file',
+  }) async {
+    return _guard(() async {
+      final form = FormData.fromMap({
+        ...fields,
+        fileField: await MultipartFile.fromFile(
+          filePath,
+          filename: fileName,
+          contentType: DioMediaType.parse(mimeType),
+        ),
+      });
+      return _dio.post<dynamic>(
+        path,
+        data: form,
+        // A phone photo over a weak connection takes longer than a JSON body.
+        options: Options(sendTimeout: const Duration(minutes: 2)),
+      );
+    });
+  }
+
   Future<Map<String, dynamic>> _guard(
     Future<Response<dynamic>> Function() request,
   ) async {

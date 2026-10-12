@@ -22,6 +22,7 @@ class Supplier extends SyncableModel {
     this.pan,
     this.openingBalance = Money.zero,
     this.isActive = true,
+    this.isTop = false,
     this.remarks,
     super.isDeleted,
     super.syncStatus,
@@ -41,6 +42,11 @@ class Supplier extends SyncableModel {
   final Money openingBalance;
 
   final bool isActive;
+
+  /// Marked by the shopkeeper as one of the suppliers they deal with most.
+  /// Pinned above the rest of the list, and first in every supplier picker.
+  final bool isTop;
+
   final String? remarks;
 
   /// Derived by the DAO's ledger query and joined in for display — never a
@@ -62,6 +68,7 @@ class Supplier extends SyncableModel {
         'pan': pan,
         'opening_balance': openingBalance.toColumn(),
         'is_active': isActive ? 1 : 0,
+        'is_top': isTop ? 1 : 0,
         'remarks': remarks,
       };
 
@@ -76,6 +83,7 @@ class Supplier extends SyncableModel {
         'pan': pan,
         'openingBalance': openingBalance.toWire(),
         'isActive': isActive,
+        'isTop': isTop,
         'remarks': remarks,
         ...syncJson,
       };
@@ -95,6 +103,7 @@ class Supplier extends SyncableModel {
         pan: map['pan'] as String?,
         openingBalance: Money.fromColumn(map['opening_balance']),
         isActive: (map['is_active'] as int?) != 0,
+        isTop: (map['is_top'] as int?) == 1,
         remarks: map['remarks'] as String?,
         balance: SupplierBalance.fromJoinedRow(map),
       );
@@ -108,6 +117,7 @@ class Supplier extends SyncableModel {
     String? pan,
     Money? openingBalance,
     bool? isActive,
+    bool? isTop,
     String? remarks,
     int? updatedAt,
     bool? isDeleted,
@@ -127,12 +137,18 @@ class Supplier extends SyncableModel {
         pan: pan ?? this.pan,
         openingBalance: openingBalance ?? this.openingBalance,
         isActive: isActive ?? this.isActive,
+        isTop: isTop ?? this.isTop,
         remarks: remarks ?? this.remarks,
         isDeleted: isDeleted ?? this.isDeleted,
         syncStatus: syncStatus ?? this.syncStatus,
         deviceId: deviceId ?? this.deviceId,
         balance: balance ?? this.balance,
       );
+
+  /// Added in schema version 3; [createTableSql] carries it for new installs.
+  static const String addIsTopSql =
+      'ALTER TABLE ${DbTables.supplier} '
+      'ADD COLUMN is_top INTEGER NOT NULL DEFAULT 0';
 
   static const String createTableSql = '''
     CREATE TABLE IF NOT EXISTS ${DbTables.supplier} (
@@ -145,6 +161,7 @@ class Supplier extends SyncableModel {
       pan             TEXT,
       opening_balance INTEGER NOT NULL DEFAULT 0,
       is_active       INTEGER NOT NULL DEFAULT 1,
+      is_top          INTEGER NOT NULL DEFAULT 0,
       remarks         TEXT,
       ${SyncColumns.definition}
     )

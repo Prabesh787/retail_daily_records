@@ -88,6 +88,16 @@ class SupplierRepository extends BaseRepository {
   Future<bool> hasTransactions(String id) =>
       dbService.suppliers.hasTransactions(id);
 
+  /// Pins or unpins a supplier at the top of the list. A plain edit of the
+  /// row, so it syncs like any other change to the supplier.
+  Future<Supplier> setTop(String id, {required bool isTop}) async {
+    final existing = await byId(id);
+    if (existing == null) {
+      throw const ValidationException('That supplier no longer exists.');
+    }
+    return save(existing.copyWith(isTop: isTop));
+  }
+
   Future<Supplier> save(Supplier supplier) async {
     final name = supplier.name.trim();
     if (name.isEmpty) {
@@ -118,6 +128,7 @@ class SupplierRepository extends BaseRepository {
             pan: supplier.pan,
             openingBalance: supplier.openingBalance,
             isActive: supplier.isActive,
+            isTop: supplier.isTop,
             remarks: supplier.remarks,
             syncStatus: SyncStatus.pending,
             deviceId: deviceId,

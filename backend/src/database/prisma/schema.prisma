@@ -173,6 +173,8 @@ model Supplier {
   openingBalance Decimal @default(0) @map("opening_balance") @db.Decimal(14, 2)
 
   isActive  Boolean  @default(true) @map("is_active")
+  /// Marked by the shopkeeper as one they deal with most; listed first.
+  isTop     Boolean  @default(false) @map("is_top")
   remarks   String?
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)

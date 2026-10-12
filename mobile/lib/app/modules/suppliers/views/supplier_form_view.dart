@@ -129,21 +129,49 @@ class SupplierFormView extends GetView<SupplierFormController> {
                 ),
               ),
 
+              AppSizes.gapMd,
+              AppCard(
+                child: Obx(
+                  () => Material(
+                    type: MaterialType.transparency,
+                    child: SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: controller.isTop.value,
+                      onChanged: (value) => controller.isTop.value = value,
+                      title: Text(
+                        'Top supplier',
+                        style: AppTextStyles.bodyStrong,
+                      ),
+                      subtitle: Text(
+                        'Pinned at the top of the supplier list and first in '
+                        'pickers.',
+                        style: AppTextStyles.caption.copyWith(
+                          color: context.palette.inkMuted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
               if (controller.isEdit) ...[
                 AppSizes.gapMd,
                 AppCard(
                   child: Obx(
-                    () => SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      value: controller.isActive.value,
-                      onChanged: (value) => controller.isActive.value = value,
-                      title: Text('Active', style: AppTextStyles.bodyStrong),
-                      subtitle: Text(
-                        controller.isActive.value
-                            ? 'Offered when recording a bill or a payment.'
-                            : 'Hidden from pickers. Existing records are kept.',
-                        style: AppTextStyles.caption.copyWith(
-                          color: context.palette.inkMuted,
+                    () => Material(
+                      type: MaterialType.transparency,
+                      child: SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        value: controller.isActive.value,
+                        onChanged: (value) => controller.isActive.value = value,
+                        title: Text('Active', style: AppTextStyles.bodyStrong),
+                        subtitle: Text(
+                          controller.isActive.value
+                              ? 'Offered when recording a bill or a payment.'
+                              : 'Hidden from pickers. Existing records are kept.',
+                          style: AppTextStyles.caption.copyWith(
+                            color: context.palette.inkMuted,
+                          ),
                         ),
                       ),
                     ),

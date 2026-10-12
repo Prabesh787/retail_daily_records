@@ -133,7 +133,9 @@ class SupplierRow extends StatelessWidget {
     final owes = outstanding.isPositive;
 
     return AppListRow(
-      leading: AppAvatar(name: supplier.name),
+      leading: supplier.isTop
+          ? _TopBadge(child: AppAvatar(name: supplier.name))
+          : AppAvatar(name: supplier.name),
       title: supplier.name,
       subtitle: _joinDetails(supplier.phone, supplier.address),
       trailing: [
@@ -148,6 +150,41 @@ class SupplierRow extends StatelessWidget {
       ],
       chevron: onTap != null,
       onTap: onTap,
+    );
+  }
+}
+
+/// A star on the avatar's corner for a supplier marked as top — visible in
+/// pickers too, which have no section header to say so.
+class _TopBadge extends StatelessWidget {
+  const _TopBadge({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        Positioned(
+          right: -3,
+          bottom: -3,
+          child: Container(
+            padding: const EdgeInsets.all(1.5),
+            decoration: BoxDecoration(
+              color: context.palette.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.star_rounded,
+              size: 14,
+              color: Colors.amber.shade600,
+              semanticLabel: 'Top supplier',
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

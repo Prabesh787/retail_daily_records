@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../../core/constants/app_sizes.dart';
 import '../../../core/widgets/domain/domain_widgets.dart';
 import '../../../core/widgets/widgets.dart';
+import '../../../data/models/supplier.dart';
 import '../controllers/suppliers_controller.dart';
 
 /// Suppliers, largest debt first.
@@ -69,21 +70,24 @@ class SuppliersView extends GetView<SuppliersController> {
                   actionLabel: controller.isSearching ? null : 'New supplier',
                   onAction: controller.createSupplier,
                 )
-              else
-                AppCard.flush(
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < controller.rows.length; i++) ...[
-                        if (i > 0) const RowDivider(),
-                        SupplierRow(
-                          supplier: controller.rows[i],
-                          onTap: () =>
-                              controller.openSupplier(controller.rows[i]),
-                        ),
-                      ],
-                    ],
-                  ),
+              else if (controller.topRows.isEmpty)
+                _SupplierList(rows: controller.rows, controller: controller)
+              else ...[
+                SectionHeader(
+                  title: 'TOP SUPPLIERS (${controller.topRows.length})',
                 ),
+                _SupplierList(rows: controller.topRows, controller: controller),
+                if (controller.otherRows.isNotEmpty) ...[
+                  AppSizes.gapLg,
+                  SectionHeader(
+                    title: 'ALL OTHERS (${controller.otherRows.length})',
+                  ),
+                  _SupplierList(
+                    rows: controller.otherRows,
+                    controller: controller,
+                  ),
+                ],
+              ],
             ],
           ),
         );
@@ -93,4 +97,28 @@ class SuppliersView extends GetView<SuppliersController> {
 
   String _caption(int count) =>
       'Across $count supplier${count == 1 ? '' : 's'}';
+}
+
+class _SupplierList extends StatelessWidget {
+  const _SupplierList({required this.rows, required this.controller});
+
+  final List<Supplier> rows;
+  final SuppliersController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard.flush(
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) const RowDivider(),
+            SupplierRow(
+              supplier: rows[i],
+              onTap: () => controller.openSupplier(rows[i]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

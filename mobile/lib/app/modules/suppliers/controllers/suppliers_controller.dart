@@ -32,6 +32,11 @@ class SuppliersController extends LoaderController<List<Supplier>> {
 
   bool get isSearching => search.value.trim().isNotEmpty;
 
+  /// Pinned above the rest. The query already orders them first; splitting
+  /// here only decides where the section break goes.
+  List<Supplier> get topRows => rows.where((s) => s.isTop).toList();
+  List<Supplier> get otherRows => rows.where((s) => !s.isTop).toList();
+
   @override
   void onInit() {
     // Typing filters the list, but not on every keystroke: each one is a

@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../core/constants/db_constants.dart';
+import '../../models/attachment.dart';
 import '../../models/customer.dart';
 import '../../models/fiscal_year.dart';
 import '../../models/purchase.dart';
@@ -28,7 +29,7 @@ class DbHelper {
   static const String _dbName = 'billrecord.db';
 
   /// Bump when the schema changes and add a step to [_onUpgrade].
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 3;
 
   Database? _db;
 
@@ -96,6 +97,7 @@ class DbHelper {
     Sale.createTableSql,
     SaleItem.createTableSql,
     SalePayment.createTableSql,
+    Attachment.createTableSql,
   ];
 
   /// Carried over from the Postgres schema, plus one `sync_status` index per
@@ -135,6 +137,7 @@ class DbHelper {
     'CREATE INDEX IF NOT EXISTS idx_sale_item_sale ON ${DbTables.saleItem} (sale_id)',
     'CREATE INDEX IF NOT EXISTS idx_sale_payment_sale ON ${DbTables.salePayment} (sale_id)',
     'CREATE INDEX IF NOT EXISTS idx_queue_created ON ${DbTables.syncQueue} (created_at)',
+    Attachment.entityIndexSql,
   ];
 
   Future<void> _onCreate(Database db, int version) async {
@@ -149,6 +152,13 @@ class DbHelper {
     // Migrations are additive and idempotent, one `if` per version step:
     //   if (oldVersion < 2) { await db.execute('ALTER TABLE ...'); }
     // Never drop a column - an older client may still be pushing it.
+    if (oldVersion < 2) {
+      await db.execute(Attachment.createTableSql);
+      await db.execute(Attachment.entityIndexSql);
+    }
+    if (oldVersion < 3) {
+      await db.execute(Supplier.addIsTopSql);
+    }
   }
 
   /// Wipes user data but keeps the schema - used by Settings > Reset.
@@ -158,6 +168,7 @@ class DbHelper {
   Future<void> clearAll() async {
     final batch = db.batch();
     for (final table in [
+      DbTables.attachment,
       DbTables.salePayment,
       DbTables.saleItem,
       DbTables.sale,

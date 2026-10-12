@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../../core/constants/db_constants.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../core/widgets/domain/domain_widgets.dart';
 import '../../../data/repositories/supplier_repository.dart';
 import '../../../routes/app_pages.dart';
@@ -94,6 +95,24 @@ class SupplierDetailController extends LoaderController<SupplierStatement> {
     search.value = '';
     range.value = const DateRange.all();
     load(silent: true);
+  }
+
+  /// One tap from the header, so marking a supplier does not mean opening the
+  /// whole edit form.
+  Future<void> toggleTop() async {
+    final supplier = statement?.supplier;
+    if (supplier == null) return;
+
+    try {
+      await _suppliers.setTop(supplier.id, isTop: !supplier.isTop);
+      AppToast.success(
+        supplier.isTop
+            ? '${supplier.name} removed from top suppliers'
+            : '${supplier.name} marked as a top supplier',
+      );
+    } on AppException catch (e) {
+      AppToast.error(e.message);
+    }
   }
 
   void edit() => Get.toNamed<void>(

@@ -117,7 +117,7 @@ class SupplierDao {
     final rows = await _db.rawQuery('''
       SELECT * FROM ($_withBalance WHERE ${where.join(' AND ')})
       ${onlyWithBalance ? 'WHERE outstanding <> 0' : ''}
-      ORDER BY outstanding DESC, name COLLATE NOCASE ASC
+      ORDER BY is_top DESC, outstanding DESC, name COLLATE NOCASE ASC
       ${limit == null ? '' : 'LIMIT $limit'}
     ''', args);
 

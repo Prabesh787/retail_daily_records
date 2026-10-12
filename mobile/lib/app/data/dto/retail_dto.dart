@@ -83,6 +83,7 @@ class SupplierDto {
       pan: WireCodec.stringOrNull(json['pan']),
       openingBalance: WireCodec.money(json['openingBalance']),
       isActive: WireCodec.boolean(json['isActive'], fallback: true),
+      isTop: WireCodec.boolean(json['isTop']),
       remarks: WireCodec.stringOrNull(json['remarks']),
     );
   }

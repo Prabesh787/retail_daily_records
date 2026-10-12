@@ -82,6 +82,15 @@ class PurchaseDetailView extends GetView<PurchaseDetailController> {
         ),
         AppSizes.gapLg,
 
+        SectionHeader(title: 'BILL SCAN (${controller.scans.length})'),
+        ScanStrip(
+          scans: controller.scans,
+          isAdding: controller.isAttaching.value,
+          onAdd: controller.attachScan,
+          onOpen: controller.openScan,
+        ),
+        AppSizes.gapLg,
+
         _Payments(controller: controller),
         AppSizes.gapLg,
 
