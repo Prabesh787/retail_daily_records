@@ -18,8 +18,8 @@ logs/
 npm-debug.log*
 
 # local file storage (uploaded evidence)
-storage/
-uploads/
+/storage/
+/uploads/
 
 # editor / OS
 .DS_Store

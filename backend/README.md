@@ -593,10 +593,10 @@ Three triggers, added by `20260903120000_sync_engine`, so that the web API, the
 seed script and a hand-run `UPDATE` all leave a synced table in a state the
 phone can reconcile with:
 
-| Trigger            | Does                                                                          |
-| ------------------ | ----------------------------------------------------------------------------- |
-| `*_sync_stamp`     | Stamps `sync_updated_at` with server time unless the writer supplied its own   |
-| `*_sync_tombstone` | Records the tombstone on every delete, the cascade from a sale included        |
+| Trigger              | Does                                                                         |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `*_sync_stamp`       | Stamps `sync_updated_at` with server time unless the writer supplied its own |
+| `*_sync_tombstone`   | Records the tombstone on every delete, the cascade from a sale included      |
 | `*_sync_untombstone` | Clears it again when a row with that id is created                           |
 
 Deleting through the existing REST endpoints therefore reaches the app too;
