@@ -20,6 +20,7 @@
     "prisma:studio": "prisma studio",
     "db:seed": "node src/database/seed.js",
     "sync:check": "node scripts/sync-check.mjs",
+    "admin:create": "node scripts/create-admin.mjs",
     "check": "npm run prisma:validate && npm run lint && npm run format:check"
   },
   "keywords": [
