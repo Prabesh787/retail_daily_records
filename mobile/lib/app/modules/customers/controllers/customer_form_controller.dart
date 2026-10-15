@@ -7,6 +7,7 @@ import '../../../core/widgets/confirm_dialog.dart';
 import '../../../data/models/customer.dart';
 import '../../../data/repositories/customer_repository.dart';
 import '../../../routes/app_pages.dart';
+import '../../../routes/app_nav.dart';
 
 /// Creating or editing a customer.
 ///
@@ -53,7 +54,7 @@ class CustomerFormController extends GetxController {
       final customer = await _customers.byId(_id!);
       if (customer == null) {
         AppToast.error('That customer no longer exists.');
-        Get.back<void>();
+        AppNav.back<void>();
         return;
       }
 
@@ -98,7 +99,7 @@ class CustomerFormController extends GetxController {
       );
 
       AppToast.success(isEdit ? 'Customer updated' : '${saved.name} added');
-      Get.back<Customer>(result: saved);
+      AppNav.back<Customer>(saved);
     } on ValidationException catch (e) {
       AppToast.error(e.message);
     } catch (e) {
@@ -123,7 +124,7 @@ class CustomerFormController extends GetxController {
     try {
       await _customers.delete(_id!);
       AppToast.success('Customer deleted');
-      Get.back<void>();
+      AppNav.back<void>();
     } on ValidationException catch (e) {
       AppToast.error(e.message);
     }

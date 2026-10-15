@@ -16,6 +16,7 @@ import '../../../data/repositories/attachment_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/supplier_payment_repository.dart';
 import '../../../routes/app_pages.dart';
+import '../../../routes/app_nav.dart';
 
 typedef PurchaseDetail = ({
   Purchase bill,
@@ -150,7 +151,7 @@ class PurchaseDetailController extends LoaderController<PurchaseDetail> {
 
     try {
       await _attachments.remove(scan.attachment);
-      Get.back<void>();
+      AppNav.back<void>();
       AppToast.success('Scan removed');
     } catch (e) {
       AppToast.error('Could not remove the scan. $e');

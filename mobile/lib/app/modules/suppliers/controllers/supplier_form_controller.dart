@@ -8,6 +8,7 @@ import '../../../core/widgets/confirm_dialog.dart';
 import '../../../data/models/supplier.dart';
 import '../../../data/repositories/supplier_repository.dart';
 import '../../../routes/app_pages.dart';
+import '../../../routes/app_nav.dart';
 
 /// Creating or editing a supplier.
 ///
@@ -56,7 +57,7 @@ class SupplierFormController extends GetxController {
       final supplier = await _suppliers.byId(_id!);
       if (supplier == null) {
         AppToast.error('That supplier no longer exists.');
-        Get.back<void>();
+        AppNav.back<void>();
         return;
       }
 
@@ -119,7 +120,7 @@ class SupplierFormController extends GetxController {
 
       final saved = await _suppliers.save(draft);
       AppToast.success(isEdit ? 'Supplier updated' : '${saved.name} added');
-      Get.back<Supplier>(result: saved);
+      AppNav.back<Supplier>(saved);
     } on ValidationException catch (e) {
       // The duplicate-name rule lives in the repository, which is the only
       // place that can actually check it.
@@ -146,7 +147,7 @@ class SupplierFormController extends GetxController {
     try {
       await _suppliers.delete(_id!);
       AppToast.success('Supplier deleted');
-      Get.back<void>();
+      AppNav.back<void>();
     } on ValidationException catch (e) {
       AppToast.error(e.message);
     }

@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../constants/app_sizes.dart';
 import '../extensions/context_ext.dart';
 import '../theme/app_text_styles.dart';
+import '../../routes/app_nav.dart';
 
 /// The one place the app asks a question it will act on.
 ///
@@ -37,12 +38,12 @@ class ConfirmDialog {
         ),
         actions: [
           TextButton(
-            onPressed: () => Get.back(result: false),
+            onPressed: () => AppNav.back<bool>(false),
             style: TextButton.styleFrom(foregroundColor: palette?.inkMuted),
             child: Text(cancelLabel),
           ),
           TextButton(
-            onPressed: () => Get.back(result: true),
+            onPressed: () => AppNav.back<bool>(true),
             style: TextButton.styleFrom(
               // Red only when something is actually being destroyed; a red
               // button on every confirmation teaches people to ignore it.

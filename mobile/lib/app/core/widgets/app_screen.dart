@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 
 import '../constants/app_sizes.dart';
 import '../extensions/context_ext.dart';
 import '../theme/app_text_styles.dart';
+import '../../routes/app_nav.dart';
 
 /// The frame every screen in the app is built in.
 ///
@@ -103,7 +103,7 @@ class AppScreen extends StatelessWidget {
             ? IconButton(
                 tooltip: 'Back',
                 icon: const Icon(Icons.chevron_left_rounded, size: 28),
-                onPressed: () => Get.back<void>(),
+                onPressed: () => AppNav.back<void>(),
               )
             : null,
         title: Column(

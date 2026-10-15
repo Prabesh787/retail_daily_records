@@ -5,6 +5,7 @@ import '../../../core/widgets/app_toast.dart';
 import '../../../data/models/app_user.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/storage_service.dart';
+import '../../../routes/app_nav.dart';
 
 /// The shop's own details — what goes on its paperwork.
 ///
@@ -78,7 +79,7 @@ class ShopController extends GetxController {
         AppToast.info('Saved on this device. It will go up when you sync.');
       }
 
-      Get.back<void>();
+      AppNav.back<void>();
     } finally {
       isSaving.value = false;
     }

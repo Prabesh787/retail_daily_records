@@ -8,6 +8,7 @@ import '../../../core/widgets/confirm_dialog.dart';
 import '../../../data/models/sale.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../routes/app_pages.dart';
+import '../../../routes/app_nav.dart';
 
 /// One sale: its lines, how it was settled, and what is still owed on it.
 class SaleDetailController extends LoaderController<Sale> {
@@ -65,7 +66,7 @@ class SaleDetailController extends LoaderController<Sale> {
     try {
       await _sales.delete(saleId);
       AppToast.success('Sale deleted');
-      Get.back<void>();
+      AppNav.back<void>();
     } catch (e) {
       AppToast.error('Could not delete this sale. $e');
     }
