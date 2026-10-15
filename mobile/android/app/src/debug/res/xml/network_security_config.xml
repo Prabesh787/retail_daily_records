@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds talk to the backend over plain HTTP (an `adb reverse` tunnel
+     to localhost, or a LAN IP). Overrides the release config of the same name;
+     once a network security config exists, usesCleartextTraffic is ignored. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

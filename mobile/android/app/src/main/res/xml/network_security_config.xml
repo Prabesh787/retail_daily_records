@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds: HTTPS everywhere except the AWS backend, which does not
+     have a certificate yet. Remove the domain-config once it serves HTTPS. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">15.135.215.40</domain>
+    </domain-config>
+</network-security-config>
