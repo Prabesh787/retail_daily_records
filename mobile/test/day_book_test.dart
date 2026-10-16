@@ -7,7 +7,6 @@ import 'package:billrecord/app/data/models/purchase.dart';
 import 'package:billrecord/app/data/models/sale.dart';
 import 'package:billrecord/app/data/models/sale_payment.dart';
 import 'package:billrecord/app/data/models/supplier_payment.dart';
-import 'package:billrecord/app/data/providers/local/sale_dao.dart';
 import 'package:billrecord/app/data/repositories/sale_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,8 +26,6 @@ void main() {
     PaymentStatus status = PaymentStatus.cleared,
   }) => SalePayment(
     id: 'p-$mode-$amount',
-    saleId: 's',
-    createdAt: 0,
     paymentMode: mode,
     amount: Money.fromWire(amount),
     status: status,
@@ -36,8 +33,6 @@ void main() {
 
   Sale sale(String total, {List<SalePayment> payments = const []}) => Sale(
     id: 's-$total',
-    createdAt: 0,
-    updatedAt: 0,
     fiscalYearId: 'fy',
     saleDate: day,
     saleType: SaleType.summary,
@@ -50,12 +45,8 @@ void main() {
     List<Purchase> purchases = const [],
     List<SupplierPayment> payments = const [],
   }) => DayBook(
-    day: SalesDay(
-      dateMs: day,
-      total: Money.sum(sales.map((s) => s.totalAmount)),
-      count: sales.length,
-      sales: sales,
-    ),
+    dateMs: day,
+    sales: sales,
     purchases: purchases,
     payments: payments,
   );

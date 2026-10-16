@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/widgets/domain/domain_widgets.dart';
@@ -21,9 +21,9 @@ class SupplierStatementController extends LoaderController<SupplierStatement> {
 
   @override
   List<String> get watches => const [
-    DbTables.supplier,
-    DbTables.purchase,
-    DbTables.supplierPayment,
+    Entities.supplier,
+    Entities.purchase,
+    Entities.supplierPayment,
   ];
 
   SupplierStatement? get statement => data.value;

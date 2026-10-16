@@ -42,8 +42,8 @@ class PaymentFormController extends GetxController {
   final Rxn<Supplier> supplier = Rxn<Supplier>();
   final Rxn<Purchase> againstBill = Rxn<Purchase>();
   final Rx<SupplierPaymentMode> mode = SupplierPaymentMode.cash.obs;
-  final RxInt paymentDate = AppDateUtils.startOfTodayMs().obs;
-  final RxInt chequeDate = AppDateUtils.startOfTodayMs().obs;
+  final RxInt paymentDate = AppDateUtils.todayMs().obs;
+  final RxInt chequeDate = AppDateUtils.todayMs().obs;
   final RxnString supplierError = RxnString();
   final RxBool isSaving = false.obs;
 
@@ -162,8 +162,7 @@ class PaymentFormController extends GetxController {
       final saved = await _payments.save(
         SupplierPayment(
           id: '',
-          createdAt: 0,
-          updatedAt: 0,
+
           fiscalYearId: year.id,
           supplierId: supplier.value!.id,
           purchaseId: againstBill.value?.id,

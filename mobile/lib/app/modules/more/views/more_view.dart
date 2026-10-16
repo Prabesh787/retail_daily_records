@@ -7,7 +7,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../routes/app_pages.dart';
 import '../../../services/auth_service.dart';
-import '../../dashboard/widgets/sync_status_chip.dart';
 import '../controllers/more_controller.dart';
 
 /// Everything that does not earn a tab.
@@ -57,11 +56,6 @@ class MoreView extends GetView<MoreController> {
                     ],
                   ),
                 ),
-                // Where the sync state belongs: here and the dashboard are the
-                // two places someone goes to ask whether their records have
-                // actually left the phone. The chip reports nothing when there
-                // is no sync service, so it needs no guard here.
-                const SyncStatusChip(),
               ],
             ),
           ),

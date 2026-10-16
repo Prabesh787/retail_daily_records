@@ -1,41 +1,55 @@
-import '../../core/constants/db_constants.dart';
+import '../../core/constants/entities.dart';
 import '../../core/domain/money.dart';
 import '../../core/errors/app_exception.dart';
-import '../enums/sync_status.dart';
 import '../enums/payment_status.dart';
 import '../models/purchase.dart';
 import '../models/supplier.dart';
 import '../models/supplier_payment.dart';
-import '../providers/local/supplier_dao.dart';
 import 'base_repository.dart';
 
 class SupplierRepository extends BaseRepository {
   @override
-  String get entity => DbTables.supplier;
+  String get entity => Entities.supplier;
 
   /// Ordered by what is owed, largest first — the list is a payables worklist,
-  /// not an address book.
+  /// not an address book. The server sorts it that way and attaches each
+  /// supplier's balance, so the order and the figures come from one answer.
   Future<List<Supplier>> list({
     String? search,
     bool onlyWithBalance = false,
     bool includeInactive = true,
-  }) =>
-      dbService.suppliers.all(
-        search: search,
-        onlyWithBalance: onlyWithBalance,
-        includeInactive: includeInactive,
-      );
+    int? limit,
+  }) async {
+    final response = await api.suppliers(
+      query: {
+        'q': search,
+        'limit': pageSize(limit),
+        if (!includeInactive) 'isActive': 'true',
+      },
+    );
 
-  Future<Supplier?> byId(String id) => dbService.suppliers.byId(id);
+    final rows = response.rows.map(Supplier.fromJson);
+    if (!onlyWithBalance) return rows.toList();
+
+    // Narrowed here rather than by a query parameter, because the endpoint that
+    // filters on the derived balance is the outstanding report — and a picker
+    // asking "who do we owe" wants the same rows this list already carries.
+    return rows.where((s) => !(s.balance?.isSettled ?? true)).toList();
+  }
+
+  Future<Supplier?> byId(String id) async {
+    final statement = await this.statement(id);
+    return statement?.supplier;
+  }
 
   /// Everything the detail screen and the statement need for one supplier over
   /// one date window: the party, its all-time balance, the window's figures,
-  /// and every movement inside the window with a running balance.
+  /// and every movement inside the window.
   ///
-  /// One method for both screens on purpose. They ask the same question and
-  /// differ only in how they draw the answer — two implementations would be two
-  /// chances for the ledger and the report to disagree about the same supplier
-  /// on the same dates, which is the one thing this product cannot do.
+  /// One call for both screens on purpose. They ask the same question and
+  /// differ only in how they draw the answer — two calls would be two chances
+  /// for the ledger and the report to disagree about the same supplier on the
+  /// same dates, which is the one thing this product cannot do.
   ///
   /// [search] narrows the movements by bill, voucher or cheque number. It does
   /// **not** narrow the window figures: a filtered list under an unfiltered
@@ -47,46 +61,50 @@ class SupplierRepository extends BaseRepository {
     int? toMs,
     String? search,
   }) async {
-    final supplier = await dbService.suppliers.byId(id);
-    if (supplier == null) return null;
+    if (id.isEmpty) return null;
 
-    final window = await dbService.suppliers.window(
-      id,
-      fromMs: fromMs,
-      toMs: toMs,
-    );
-
-    final purchases = await dbService.purchases.all(
-      supplierId: id,
-      fromMs: fromMs,
-      toMs: toMs,
-      search: search,
-    );
-    final payments = await dbService.supplierPayments.all(
-      supplierId: id,
-      fromMs: fromMs,
-      toMs: toMs,
-      search: search,
-    );
-
-    return SupplierStatement(
-      supplier: supplier,
-      window: window,
-      purchases: purchases,
-      payments: payments,
-    );
+    try {
+      final response = await api.supplier(
+        id,
+        query: {...window(fromMs: fromMs, toMs: toMs), 'q': search},
+      );
+      return SupplierStatement.fromJson(response.object);
+    } on ValidationException catch (e) {
+      if (e.isNotFound) return null;
+      rethrow;
+    }
   }
 
-  Future<List<Supplier>> topOutstanding({int limit = 4}) =>
-      dbService.suppliers.topOutstanding(limit: limit);
+  /// Suppliers ranked by what is owed — the dashboard's "owed the most".
+  Future<List<Supplier>> topOutstanding({int limit = 4}) async {
+    final response = await api.supplierOutstanding(
+      query: {'onlyOutstanding': 'true'},
+    );
 
-  Future<({Money total, int supplierCount})> payable() =>
-      dbService.suppliers.payable();
+    final rows = (response.object['suppliers'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(Supplier.fromJson)
+        .toList();
 
-  Future<int> count() => dbService.suppliers.count();
+    return rows.take(limit).toList();
+  }
 
-  Future<bool> hasTransactions(String id) =>
-      dbService.suppliers.hasTransactions(id);
+  /// Total payable across every supplier, and how many are actually owed
+  /// anything — the two figures on the dashboard's payable tile.
+  Future<({Money total, int supplierCount})> payable() async {
+    final response = await api.supplierOutstanding(
+      query: {'onlyOutstanding': 'true'},
+    );
+    final totals = response.object['totals'];
+
+    if (totals is! Map<String, dynamic>) {
+      return (total: Money.zero, supplierCount: 0);
+    }
+    return (
+      total: Money.fromWire(totals['outstanding']),
+      supplierCount: (totals['owingCount'] as num?)?.toInt() ?? 0,
+    );
+  }
 
   Future<Supplier> save(Supplier supplier) async {
     final name = supplier.name.trim();
@@ -95,85 +113,24 @@ class SupplierRepository extends BaseRepository {
     }
 
     final isNew = supplier.id.isEmpty;
+    final draft = supplier.copyWith(name: name);
 
-    // Two suppliers with the same name is not illegal, but it is almost always
-    // a duplicate being entered twice — and a duplicate splits one balance in
-    // half, which is the failure this whole app exists to prevent.
-    if (await dbService.suppliers
-        .nameExists(name, exceptId: isNew ? null : supplier.id)) {
-      throw ValidationException('There is already a supplier called $name.');
-    }
-
-    final timestamp = nowMs;
-    final stamped = isNew
-        ? Supplier(
-            id: newId(),
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            name: name,
-            contactPerson: supplier.contactPerson,
-            phone: supplier.phone,
-            email: supplier.email,
-            address: supplier.address,
-            pan: supplier.pan,
-            openingBalance: supplier.openingBalance,
-            isActive: supplier.isActive,
-            remarks: supplier.remarks,
-            syncStatus: SyncStatus.pending,
-            deviceId: deviceId,
-          )
-        : supplier.copyWith(
-            name: name,
-            updatedAt: timestamp,
-            syncStatus: SyncStatus.pending,
-            deviceId: deviceId,
-          );
-
-    await write((txn) async {
-      await dbService.suppliers.upsert(txn, stamped);
-      await enqueue(
-        txn,
-        entity: DbTables.supplier,
-        entityId: stamped.id,
-        payload: stamped.toJson(),
-        updatedAt: timestamp,
-      );
+    return write(() async {
+      final response = isNew
+          ? await api.createSupplier(draft.toRequestBody())
+          : await api.updateSupplier(
+              draft.id,
+              draft.toRequestBody(includeIsActive: true),
+            );
+      return Supplier.fromJson(response.object);
     });
-
-    return stamped;
   }
 
-  /// Soft delete only — a hard delete would be invisible to the other clients,
-  /// which would resurrect the supplier on their next push.
-  ///
   /// A supplier with documents against them refuses outright: their bills and
   /// payments would be orphaned and the derived balance would silently stop
-  /// counting them. Deactivate instead.
-  Future<void> delete(String id) async {
-    final existing = await byId(id);
-    if (existing == null) return;
-
-    if (await dbService.suppliers.hasTransactions(id)) {
-      throw ValidationException(
-        '${existing.name} has bills or payments recorded. Mark them inactive '
-        'instead of deleting them.',
-      );
-    }
-
-    final timestamp = nowMs;
-    await write((txn) async {
-      await dbService.suppliers.softDelete(txn, id, timestamp);
-      await enqueue(
-        txn,
-        entity: DbTables.supplier,
-        entityId: id,
-        operation: SyncOperationType.delete,
-        payload:
-            existing.copyWith(isDeleted: true, updatedAt: timestamp).toJson(),
-        updatedAt: timestamp,
-      );
-    });
-  }
+  /// counting them. The server enforces that and names the count in its
+  /// message, so the message is passed through as it is.
+  Future<void> delete(String id) => write(() => api.deleteSupplier(id));
 
   /// The way to retire a supplier who has history.
   Future<Supplier?> setActive(String id, bool isActive) async {
@@ -185,8 +142,8 @@ class SupplierRepository extends BaseRepository {
 
 /// One supplier's ledger over a date window.
 ///
-/// Holds the raw movements once and exposes the two orderings the screens
-/// need, rather than making each of them sort and interleave again:
+/// Holds the movements once and exposes the two orderings the screens need,
+/// rather than making each of them sort and interleave again:
 ///
 ///   * [movements] — newest first, for the detail screen's ledger tab, which is
 ///     a browsing list where the latest activity is what matters.
@@ -200,10 +157,24 @@ class SupplierStatement {
     required this.payments,
   });
 
+  factory SupplierStatement.fromJson(Map<String, dynamic> json) =>
+      SupplierStatement(
+        supplier: Supplier.fromJson(json),
+        window: SupplierWindow.fromJson(json['window']),
+        purchases: (json['purchases'] as List? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(Purchase.fromJson)
+            .toList(),
+        payments: (json['payments'] as List? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(SupplierPayment.fromJson)
+            .toList(),
+      );
+
   final Supplier supplier;
   final SupplierWindow window;
 
-  /// Newest first, as the DAOs return them.
+  /// Newest first, as the API returns them.
   final List<Purchase> purchases;
   final List<SupplierPayment> payments;
 
@@ -213,9 +184,9 @@ class SupplierStatement {
 
   /// Bills and payments as one column, newest first.
   List<LedgerMovement> get movements => _movements ??= [
-    for (final purchase in purchases) LedgerMovement.bill(purchase),
-    for (final payment in payments) LedgerMovement.payment(payment),
-  ]..sort((a, b) => b.dateMs.compareTo(a.dateMs));
+        for (final purchase in purchases) LedgerMovement.bill(purchase),
+        for (final payment in payments) LedgerMovement.payment(payment),
+      ]..sort((a, b) => b.dateMs.compareTo(a.dateMs));
 
   List<LedgerMovement>? _lines;
 
@@ -258,41 +229,41 @@ class LedgerMovement {
   });
 
   factory LedgerMovement.bill(Purchase purchase) => LedgerMovement(
-    id: purchase.id,
-    purchase: purchase,
-    dateMs: purchase.billDate,
-    dateBs: purchase.billDateBs,
-    reference: 'Bill ${purchase.billNo}',
-    detail: purchase.description,
-    debit: purchase.amount,
-  );
+        id: purchase.id,
+        purchase: purchase,
+        dateMs: purchase.billDate,
+        dateBs: purchase.billDateBs,
+        reference: 'Bill ${purchase.billNo}',
+        detail: purchase.description,
+        debit: purchase.amount,
+      );
 
   factory LedgerMovement.payment(SupplierPayment payment) => LedgerMovement(
-    id: payment.id,
-    payment: payment,
-    dateMs: payment.paymentDate,
-    dateBs: payment.paymentDateBs,
-    reference: payment.voucherNo == null
-        ? payment.paymentMode.label
-        : 'Voucher ${payment.voucherNo}',
-    detail: [
-      payment.paymentMode.label,
-      if (payment.chequeNo != null) 'cheque ${payment.chequeNo}',
-      if (payment.purchaseBillNo != null)
-        'against bill ${payment.purchaseBillNo}',
-    ].join(' · '),
-    status: payment.status,
-    // A cancelled payment settled nothing, so it credits nothing — the line is
-    // kept for the audit trail, not for the arithmetic.
-    credit: payment.recognisedAmount,
-  );
+        id: payment.id,
+        payment: payment,
+        dateMs: payment.paymentDate,
+        dateBs: payment.paymentDateBs,
+        reference: payment.voucherNo == null
+            ? payment.paymentMode.label
+            : 'Voucher ${payment.voucherNo}',
+        detail: [
+          payment.paymentMode.label,
+          if (payment.chequeNo != null) 'cheque ${payment.chequeNo}',
+          if (payment.purchaseBillNo != null)
+            'against bill ${payment.purchaseBillNo}',
+        ].join(' · '),
+        status: payment.status,
+        // A cancelled payment settled nothing, so it credits nothing — the line
+        // is kept for the audit trail, not for the arithmetic.
+        credit: payment.recognisedAmount,
+      );
 
   /// The record this line came from. Exactly one is set.
   ///
   /// Carried through so the detail screen can draw its ledger with the same
-  /// `PurchaseRow` and `PaymentRow` every other list uses, instead of a
-  /// third rendering of a bill that drifts away from the other two. The
-  /// statement ignores these and reads the figures below.
+  /// `PurchaseRow` and `PaymentRow` every other list uses, instead of a third
+  /// rendering of a bill that drifts away from the other two. The statement
+  /// ignores these and reads the figures below.
   final Purchase? purchase;
   final SupplierPayment? payment;
 
@@ -317,16 +288,16 @@ class LedgerMovement {
   final Money? balance;
 
   LedgerMovement at(Money running) => LedgerMovement(
-    id: id,
-    purchase: purchase,
-    payment: payment,
-    dateMs: dateMs,
-    dateBs: dateBs,
-    reference: reference,
-    detail: detail,
-    status: status,
-    debit: debit,
-    credit: credit,
-    balance: running,
-  );
+        id: id,
+        purchase: purchase,
+        payment: payment,
+        dateMs: dateMs,
+        dateBs: dateBs,
+        reference: reference,
+        detail: detail,
+        status: status,
+        debit: debit,
+        credit: credit,
+        balance: running,
+      );
 }

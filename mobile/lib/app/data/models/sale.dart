@@ -1,9 +1,7 @@
-import '../../core/constants/db_constants.dart';
 import '../../core/domain/money.dart';
 import '../../core/utils/nepali_date.dart';
+import '../dto/wire_codec.dart';
 import '../enums/sale_type.dart';
-import '../enums/sync_status.dart';
-import 'base/syncable_model.dart';
 import 'sale_item.dart';
 import 'sale_payment.dart';
 
@@ -15,15 +13,12 @@ import 'sale_payment.dart';
 /// A day's takings is not a record here; it is the sum of the day's sales. That
 /// is what the day book screen shows.
 ///
-/// [subtotal] and [totalAmount] are derived for an itemised sale — computed
-/// from the lines by [recalculated], never accepted from a form. The server
-/// does the same on ingest and ignores whatever a client sends, so the two
-/// cannot disagree.
-class Sale extends SyncableModel {
+/// [subtotal] and [totalAmount] are derived on the server from the lines and
+/// whatever a form sends for them is ignored, so the total and the rows under
+/// it cannot disagree.
+class Sale {
   const Sale({
-    required super.id,
-    required super.createdAt,
-    required super.updatedAt,
+    required this.id,
     required this.fiscalYearId,
     required this.saleDate,
     required this.saleType,
@@ -36,13 +31,15 @@ class Sale extends SyncableModel {
     this.discount = Money.zero,
     this.remarks,
     this.createdById,
-    super.isDeleted,
-    super.syncStatus,
-    super.deviceId,
     this.items = const [],
     this.payments = const [],
     this.customerName,
+    this.createdAt = 0,
+    this.updatedAt = 0,
   });
+
+  /// Empty on a draft the form has built and the server has not seen yet.
+  final String id;
 
   final String fiscalYearId;
 
@@ -63,14 +60,18 @@ class Sale extends SyncableModel {
   final String? remarks;
   final String? createdById;
 
-  /// Loaded on demand by the DAO; empty in list queries, because a list shows a
-  /// total and a date and loading every line for every row would be N+1 queries
-  /// for data nothing on screen displays.
+  /// The invoice lines come back only from the detail endpoint — a list shows a
+  /// total and a date, and loading every line for every row would be data
+  /// nothing on screen draws. The settlement lines come back with both, because
+  /// "sold" and "taken" are different figures a list has to keep apart.
   final List<SaleItem> items;
   final List<SalePayment> payments;
 
-  /// Joined in for display; not a stored column.
+  /// Attached by the server for display; not a column.
   final String? customerName;
+
+  final int createdAt;
+  final int updatedAt;
 
   /// What was actually taken, ignoring credit lines and cancelled instruments.
   Money get settledTotal =>
@@ -84,90 +85,52 @@ class Sale extends SyncableModel {
   String get saleDateBsOrDerived =>
       saleDateBs ?? NepaliDate.msToBs(saleDate) ?? '';
 
-  /// This sale with its derived totals recomputed from its own lines.
+  factory Sale.fromJson(Map<String, dynamic> json) => Sale(
+        id: WireCodec.string(json['id']),
+        fiscalYearId: WireCodec.string(json['fiscalYearId']),
+        invoiceNo: WireCodec.stringOrNull(json['invoiceNo']),
+        saleDate: WireCodec.dateMs(json['saleDate']) ?? 0,
+        saleDateBs: WireCodec.stringOrNull(json['saleDateBs']),
+        customerId: WireCodec.stringOrNull(json['customerId']),
+        saleType: SaleType.fromValue(WireCodec.stringOrNull(json['saleType'])),
+        description: WireCodec.stringOrNull(json['description']),
+        subtotal: WireCodec.money(json['subtotal']),
+        discount: WireCodec.money(json['discount']),
+        totalAmount: WireCodec.money(json['totalAmount']),
+        remarks: WireCodec.stringOrNull(json['remarks']),
+        createdById: WireCodec.stringOrNull(json['createdById']),
+        items: WireCodec.objects(json['items']).map(SaleItem.fromJson).toList(),
+        payments: WireCodec.objects(json['payments'])
+            .map(SalePayment.fromJson)
+            .toList(),
+        customerName: WireCodec.nestedName(json['customer']),
+        createdAt: WireCodec.millis(json['createdAt'], fallback: 0),
+        updatedAt: WireCodec.millis(json['updatedAt'], fallback: 0),
+      );
+
+  /// The body `POST /sales` accepts.
   ///
-  /// The single place an itemised sale's totals are produced. A summary sale has
-  /// no lines to derive from, so the figure that was entered is the total and
-  /// the subtotal simply matches it.
-  Sale get recalculated {
-    if (saleType == SaleType.summary) {
-      return copyWith(subtotal: totalAmount, discount: Money.zero);
-    }
-    final lineTotal = Money.sum(items.map((item) => item.amount));
-    return copyWith(subtotal: lineTotal, totalAmount: lineTotal - discount);
-  }
-
-  @override
-  Map<String, dynamic> toMap() => {
-        ...syncMap,
-        'fiscal_year_id': fiscalYearId,
-        'invoice_no': invoiceNo,
-        'sale_date': saleDate,
-        'sale_date_bs': saleDateBs,
-        'customer_id': customerId,
-        'sale_type': saleType.value,
-        'description': description,
-        'subtotal': subtotal.toColumn(),
-        'discount': discount.toColumn(),
-        'total_amount': totalAmount.toColumn(),
-        'remarks': remarks,
-        'created_by': createdById,
-      };
-
-  /// The lines and the payments ride along with the header so the sale syncs
-  /// atomically — a header that landed without its lines would be an accounting
-  /// error, not a partial success.
-  @override
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'fiscalYearId': fiscalYearId,
+  /// `subtotal` is absent and `totalAmount` is sent only for a summary sale,
+  /// because that is the only shape where it is an input rather than a result.
+  /// For an itemised sale the lines are the truth and the server derives the
+  /// totals from them; sending a figure it is going to recompute would only
+  /// invite the two to differ.
+  Map<String, dynamic> toRequestBody() => {
+        if (fiscalYearId.isNotEmpty) 'fiscalYearId': fiscalYearId,
         'invoiceNo': invoiceNo,
-        'saleDate': NepaliDate.toIsoDate(NepaliDate.fromMs(saleDate)),
-        'saleDateBs': saleDateBs,
+        'saleDate': WireCodec.isoDate(saleDate),
+        'saleDateBs': saleDateBs ?? NepaliDate.msToBs(saleDate),
         'customerId': customerId,
         'saleType': saleType.value,
         'description': description,
-        'subtotal': subtotal.toWire(),
         'discount': discount.toWire(),
-        'totalAmount': totalAmount.toWire(),
+        if (!saleType.hasItems) 'totalAmount': totalAmount.toWire(),
+        'items': [for (final item in items) item.toRequestBody()],
+        'payments': [for (final payment in payments) payment.toRequestBody()],
         'remarks': remarks,
-        'createdById': createdById,
-        'items': items.map((item) => item.toJson()).toList(),
-        'payments': payments.map((payment) => payment.toJson()).toList(),
-        ...syncJson,
       };
 
-  factory Sale.fromMap(
-    Map<String, dynamic> map, {
-    List<SaleItem>? items,
-    List<SalePayment>? payments,
-  }) =>
-      Sale(
-        id: SyncableModel.idOf(map),
-        createdAt: SyncableModel.createdAtOf(map),
-        updatedAt: SyncableModel.updatedAtOf(map),
-        isDeleted: SyncableModel.isDeletedOf(map),
-        syncStatus: SyncableModel.syncStatusOf(map),
-        deviceId: SyncableModel.deviceIdOf(map),
-        fiscalYearId: (map['fiscal_year_id'] as String?) ?? '',
-        invoiceNo: map['invoice_no'] as String?,
-        saleDate: SyncableModel.toInt(map['sale_date']),
-        saleDateBs: map['sale_date_bs'] as String?,
-        customerId: map['customer_id'] as String?,
-        saleType: SaleType.fromValue(map['sale_type'] as String?),
-        description: map['description'] as String?,
-        subtotal: Money.fromColumn(map['subtotal']),
-        discount: Money.fromColumn(map['discount']),
-        totalAmount: Money.fromColumn(map['total_amount']),
-        remarks: map['remarks'] as String?,
-        createdById: map['created_by'] as String?,
-        items: items ?? const [],
-        payments: payments ?? const [],
-        customerName: map['customer_name'] as String?,
-      );
-
   Sale copyWith({
-    String? fiscalYearId,
     String? invoiceNo,
     int? saleDate,
     String? saleDateBs,
@@ -178,20 +141,13 @@ class Sale extends SyncableModel {
     Money? discount,
     Money? totalAmount,
     String? remarks,
-    String? createdById,
-    int? updatedAt,
-    bool? isDeleted,
-    SyncStatus? syncStatus,
-    String? deviceId,
     List<SaleItem>? items,
     List<SalePayment>? payments,
     String? customerName,
   }) =>
       Sale(
         id: id,
-        createdAt: createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-        fiscalYearId: fiscalYearId ?? this.fiscalYearId,
+        fiscalYearId: fiscalYearId,
         invoiceNo: invoiceNo ?? this.invoiceNo,
         saleDate: saleDate ?? this.saleDate,
         saleDateBs: saleDateBs ?? this.saleDateBs,
@@ -202,39 +158,11 @@ class Sale extends SyncableModel {
         discount: discount ?? this.discount,
         totalAmount: totalAmount ?? this.totalAmount,
         remarks: remarks ?? this.remarks,
-        createdById: createdById ?? this.createdById,
-        isDeleted: isDeleted ?? this.isDeleted,
-        syncStatus: syncStatus ?? this.syncStatus,
-        deviceId: deviceId ?? this.deviceId,
+        createdById: createdById,
         items: items ?? this.items,
         payments: payments ?? this.payments,
         customerName: customerName ?? this.customerName,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
       );
-
-  static const String createTableSql = '''
-    CREATE TABLE IF NOT EXISTS ${DbTables.sale} (
-      id             TEXT PRIMARY KEY,
-      fiscal_year_id TEXT NOT NULL,
-      invoice_no     TEXT,
-      sale_date      INTEGER NOT NULL,
-      sale_date_bs   TEXT,
-      customer_id    TEXT,
-      sale_type      TEXT NOT NULL,
-      description    TEXT,
-      subtotal       INTEGER NOT NULL DEFAULT 0,
-      discount       INTEGER NOT NULL DEFAULT 0,
-      total_amount   INTEGER NOT NULL DEFAULT 0,
-      remarks        TEXT,
-      created_by     TEXT,
-      ${SyncColumns.definition}
-    )
-  ''';
-
-  /// Mirrors `sales_fy_invoice_no_key`. Partial on `invoice_no IS NOT NULL`,
-  /// which is exactly what summary sales need — any number of them carry none.
-  static const String uniqueInvoiceSql = '''
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_sale_fy_invoice_no
-      ON ${DbTables.sale} (fiscal_year_id, invoice_no)
-      WHERE invoice_no IS NOT NULL AND is_deleted = 0
-  ''';
 }

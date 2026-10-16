@@ -2,10 +2,9 @@ import '../dto/wire_codec.dart';
 
 /// The signed-in account and the shop it trades as.
 ///
-/// Not a synced entity and not a table: there is exactly one of these on a
-/// device, it is whatever `GET /auth/me` last said, and it is cached in
-/// key-value storage so the app can print a bill under the shop's name with no
-/// network.
+/// There is exactly one of these on a device, it is whatever `GET /auth/me`
+/// last said, and it is cached in key-value storage so the shop's name can
+/// appear on the first frame rather than after a round trip.
 class AppUser {
   const AppUser({
     required this.id,

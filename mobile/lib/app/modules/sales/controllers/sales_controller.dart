@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/domain/day_group.dart';
 import '../../../core/domain/money.dart';
@@ -17,7 +17,7 @@ class SalesController extends LoaderController<List<Sale>> {
   final Rxn<SaleType> typeFilter = Rxn<SaleType>();
 
   @override
-  List<String> get watches => const [DbTables.sale];
+  List<String> get watches => const [Entities.sale];
 
   List<Sale> get rows => data.value ?? const [];
 

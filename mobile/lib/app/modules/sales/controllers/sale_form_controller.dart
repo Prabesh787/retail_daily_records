@@ -48,8 +48,6 @@ class ItemDraft {
 
   SaleItem toItem() => SaleItem(
     id: '',
-    saleId: '',
-    createdAt: 0,
     description: description.text.trim(),
     quantity: qty,
     unit: unit.text.trim().isEmpty ? 'pcs' : unit.text.trim(),
@@ -88,7 +86,7 @@ class SaleFormController extends GetxController {
   final Rx<SaleType> saleType = SaleType.summary.obs;
   final Rx<SalePaymentMode> paymentMode = SalePaymentMode.cash.obs;
   final Rxn<Customer> customer = Rxn<Customer>();
-  final RxInt saleDate = AppDateUtils.startOfTodayMs().obs;
+  final RxInt saleDate = AppDateUtils.todayMs().obs;
   final RxBool isSaving = false.obs;
 
   /// The itemised lines. Starts with one empty row so the form opens ready to
@@ -256,8 +254,7 @@ class SaleFormController extends GetxController {
       final saved = await _sales.save(
         Sale(
           id: '',
-          createdAt: 0,
-          updatedAt: 0,
+
           fiscalYearId: year.id,
           invoiceNo: _trimmed(invoiceNo),
           saleDate: saleDate.value,
@@ -306,8 +303,7 @@ class SaleFormController extends GetxController {
       return [
         SalePayment(
           id: '',
-          saleId: '',
-          createdAt: 0,
+
           paymentMode: SalePaymentMode.credit,
           amount: grandTotal,
         ),
@@ -318,8 +314,7 @@ class SaleFormController extends GetxController {
       if (paidNow.isPositive)
         SalePayment(
           id: '',
-          saleId: '',
-          createdAt: 0,
+
           paymentMode: paymentMode.value,
           amount: paidNow,
         ),
@@ -328,8 +323,7 @@ class SaleFormController extends GetxController {
       if (dueNow.isPositive)
         SalePayment(
           id: '',
-          saleId: '',
-          createdAt: 0,
+
           paymentMode: SalePaymentMode.credit,
           amount: dueNow,
         ),

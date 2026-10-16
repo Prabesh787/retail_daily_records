@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/domain/money.dart';
 import '../../../data/models/supplier.dart';
@@ -16,13 +16,13 @@ class SuppliersController extends LoaderController<List<Supplier>> {
 
   /// Balances are derived from bills and payments, so this list is stale the
   /// moment either of those is written — even though no supplier row moved.
-  /// Watching only [DbTables.supplier] would leave every figure here wrong
+  /// Watching only [Entities.supplier] would leave every figure here wrong
   /// after a payment until the screen was rebuilt for some other reason.
   @override
   List<String> get watches => const [
-    DbTables.supplier,
-    DbTables.purchase,
-    DbTables.supplierPayment,
+    Entities.supplier,
+    Entities.purchase,
+    Entities.supplierPayment,
   ];
 
   List<Supplier> get rows => data.value ?? const [];

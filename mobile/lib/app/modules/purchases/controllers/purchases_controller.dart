@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/domain/day_group.dart';
 import '../../../core/domain/money.dart';
@@ -20,8 +20,8 @@ class PurchasesController extends LoaderController<List<Purchase>> {
   /// though the bill itself was not touched.
   @override
   List<String> get watches => const [
-    DbTables.purchase,
-    DbTables.supplierPayment,
+    Entities.purchase,
+    Entities.supplierPayment,
   ];
 
   List<Purchase> get rows => data.value ?? const [];

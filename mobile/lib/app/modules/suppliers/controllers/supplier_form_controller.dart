@@ -75,7 +75,11 @@ class SupplierFormController extends GetxController {
       // Deleting is offered only where it is actually allowed. A supplier with
       // documents against them cannot be removed — their bills would be
       // orphaned — so the button is absent rather than present and failing.
-      canDelete.value = !await _suppliers.hasTransactions(_id!);
+      //
+      // Read off the balance the supplier already arrived with rather than
+      // asked for separately: the server derives it from the very bills and
+      // payments that decide the answer.
+      canDelete.value = !(supplier.balance?.hasHistory ?? true);
     } finally {
       isLoading.value = false;
     }
@@ -97,8 +101,6 @@ class SupplierFormController extends GetxController {
         // rest of the existing row has to come along or fields the form does
         // not show would be wiped.
         id: _id ?? '',
-        createdAt: _existing?.createdAt ?? 0,
-        updatedAt: _existing?.updatedAt ?? 0,
         name: name.text.trim(),
         contactPerson: _trimmed(contactPerson),
         phone: _trimmed(phone),
@@ -109,9 +111,8 @@ class SupplierFormController extends GetxController {
             Money.tryParse(openingBalance.text) ?? Money.zero,
         isActive: isActive.value,
         remarks: _trimmed(remarks),
-        // Sync status and device id are stamped by the repository — it is the
-        // layer that knows the write is happening, so setting them here would
-        // only be a guess it overwrites.
+        // No timestamps: the server owns those, and a value invented here
+        // would only be a guess it overwrites.
       );
 
       final saved = await _suppliers.save(draft);

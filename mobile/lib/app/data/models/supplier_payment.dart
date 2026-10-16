@@ -1,15 +1,13 @@
-import '../../core/constants/db_constants.dart';
 import '../../core/domain/money.dart';
 import '../../core/utils/nepali_date.dart';
+import '../dto/wire_codec.dart';
 import '../enums/payment_status.dart';
 import '../enums/supplier_payment_mode.dart';
-import '../enums/sync_status.dart';
-import 'base/syncable_model.dart';
 
 /// Money the shop paid a supplier.
 ///
-/// Stored separately from the purchase it settles — never as a `paid_amount`
-/// column — so that partial, credit, cash-plus-cheque and future-dated-cheque
+/// Stored apart from the purchase it settles — never as a `paid_amount` column
+/// — so that partial, credit, cash-plus-cheque and future-dated-cheque
 /// settlements are all expressible:
 ///
 ///     Purchase              Rs. 100,000
@@ -20,11 +18,9 @@ import 'base/syncable_model.dart';
 ///
 /// [purchaseId] is optional: a payment may settle one specific bill, several
 /// older ones, or just the supplier's general outstanding balance.
-class SupplierPayment extends SyncableModel {
+class SupplierPayment {
   const SupplierPayment({
-    required super.id,
-    required super.createdAt,
-    required super.updatedAt,
+    required this.id,
     required this.fiscalYearId,
     required this.supplierId,
     required this.paymentDate,
@@ -42,12 +38,14 @@ class SupplierPayment extends SyncableModel {
     this.description,
     this.remarks,
     this.createdById,
-    super.isDeleted,
-    super.syncStatus,
-    super.deviceId,
     this.supplierName,
     this.purchaseBillNo,
+    this.createdAt = 0,
+    this.updatedAt = 0,
   });
+
+  /// Empty on a draft the form has built and the server has not seen yet.
+  final String id;
 
   final String fiscalYearId;
   final String supplierId;
@@ -80,12 +78,15 @@ class SupplierPayment extends SyncableModel {
   final String? remarks;
   final String? createdById;
 
-  /// Joined in for display; not stored columns.
+  /// Attached by the server for display; not columns.
   final String? supplierName;
   final String? purchaseBillNo;
 
-  /// What this payment contributes to the supplier's derived balance. A
-  /// cancelled payment settled nothing.
+  final int createdAt;
+  final int updatedAt;
+
+  /// What this payment contributes to the supplier's balance. A cancelled
+  /// payment settled nothing.
   Money get recognisedAmount => status.reducesLiability ? amount : Money.zero;
 
   /// Handed over but not yet debited — still counted as paid, still reported
@@ -100,86 +101,77 @@ class SupplierPayment extends SyncableModel {
   bool get isChequeAwaitingClearance =>
       paymentMode.isCheque && status == PaymentStatus.issued;
 
-  @override
-  Map<String, dynamic> toMap() => {
-        ...syncMap,
-        'fiscal_year_id': fiscalYearId,
-        'supplier_id': supplierId,
-        'purchase_id': purchaseId,
-        'voucher_no': voucherNo,
-        'payment_date': paymentDate,
-        'payment_date_bs': paymentDateBs,
-        'payment_mode': paymentMode.value,
-        'amount': amount.toColumn(),
-        'cheque_no': chequeNo,
-        'cheque_date': chequeDate,
-        'cheque_date_bs': chequeDateBs,
-        'reference_no': referenceNo,
-        'cleared_date': clearedDate,
-        'status': status.value,
-        'description': description,
-        'remarks': remarks,
-        'created_by': createdById,
-      };
+  factory SupplierPayment.fromJson(Map<String, dynamic> json) {
+    final purchase = json['purchase'];
 
-  @override
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'fiscalYearId': fiscalYearId,
-        'supplierId': supplierId,
-        'purchaseId': purchaseId,
-        'voucherNo': voucherNo,
-        'paymentDate': _iso(paymentDate),
-        'paymentDateBs': paymentDateBs,
-        'paymentMode': paymentMode.value,
-        'amount': amount.toWire(),
-        'chequeNo': chequeNo,
-        'chequeDate': _isoOrNull(chequeDate),
-        'chequeDateBs': chequeDateBs,
-        'referenceNo': referenceNo,
-        'clearedDate': _isoOrNull(clearedDate),
-        'status': status.value,
-        'description': description,
-        'remarks': remarks,
-        'createdById': createdById,
-        ...syncJson,
-      };
+    return SupplierPayment(
+      id: WireCodec.string(json['id']),
+      fiscalYearId: WireCodec.string(json['fiscalYearId']),
+      supplierId: WireCodec.string(json['supplierId']),
+      purchaseId: WireCodec.stringOrNull(json['purchaseId']),
+      voucherNo: WireCodec.stringOrNull(json['voucherNo']),
+      paymentDate: WireCodec.dateMs(json['paymentDate']) ?? 0,
+      paymentDateBs: WireCodec.stringOrNull(json['paymentDateBs']),
+      paymentMode: SupplierPaymentMode.fromValue(
+        WireCodec.stringOrNull(json['paymentMode']),
+      ),
+      amount: WireCodec.money(json['amount']),
+      chequeNo: WireCodec.stringOrNull(json['chequeNo']),
+      chequeDate: WireCodec.dateMs(json['chequeDate']),
+      chequeDateBs: WireCodec.stringOrNull(json['chequeDateBs']),
+      referenceNo: WireCodec.stringOrNull(json['referenceNo']),
+      clearedDate: WireCodec.dateMs(json['clearedDate']),
+      status: PaymentStatus.fromValue(WireCodec.stringOrNull(json['status'])),
+      description: WireCodec.stringOrNull(json['description']),
+      remarks: WireCodec.stringOrNull(json['remarks']),
+      createdById: WireCodec.stringOrNull(json['createdById']),
+      supplierName: WireCodec.nestedName(json['supplier']),
+      purchaseBillNo: purchase is Map
+          ? WireCodec.stringOrNull(purchase['billNo'])
+          : null,
+      createdAt: WireCodec.millis(json['createdAt'], fallback: 0),
+      updatedAt: WireCodec.millis(json['updatedAt'], fallback: 0),
+    );
+  }
 
-  static String _iso(int ms) => NepaliDate.toIsoDate(NepaliDate.fromMs(ms));
-  static String? _isoOrNull(int? ms) => ms == null ? null : _iso(ms);
+  /// The body `POST /supplier-payments` accepts.
+  ///
+  /// The cheque fields travel only for a cheque and the reference only for the
+  /// modes that have one: the server refuses cheque details on a cash payment
+  /// outright, which is the right rule and one the form must not fight.
+  ///
+  /// `status` and `clearedDate` are left out on purpose. Cash is cleared the
+  /// moment it changes hands and a cheque is only issued until the bank pays
+  /// it, and the server applies exactly that default — stating it here as well
+  /// would be two places for one rule to live.
+  Map<String, dynamic> toRequestBody() {
+    final isCheque = paymentMode.isCheque;
 
-  factory SupplierPayment.fromMap(Map<String, dynamic> map) => SupplierPayment(
-        id: SyncableModel.idOf(map),
-        createdAt: SyncableModel.createdAtOf(map),
-        updatedAt: SyncableModel.updatedAtOf(map),
-        isDeleted: SyncableModel.isDeletedOf(map),
-        syncStatus: SyncableModel.syncStatusOf(map),
-        deviceId: SyncableModel.deviceIdOf(map),
-        fiscalYearId: (map['fiscal_year_id'] as String?) ?? '',
-        supplierId: (map['supplier_id'] as String?) ?? '',
-        purchaseId: map['purchase_id'] as String?,
-        voucherNo: map['voucher_no'] as String?,
-        paymentDate: SyncableModel.toInt(map['payment_date']),
-        paymentDateBs: map['payment_date_bs'] as String?,
-        paymentMode:
-            SupplierPaymentMode.fromValue(map['payment_mode'] as String?),
-        amount: Money.fromColumn(map['amount']),
-        chequeNo: map['cheque_no'] as String?,
-        chequeDate: map['cheque_date'] as int?,
-        chequeDateBs: map['cheque_date_bs'] as String?,
-        referenceNo: map['reference_no'] as String?,
-        clearedDate: map['cleared_date'] as int?,
-        status: PaymentStatus.fromValue(map['status'] as String?),
-        description: map['description'] as String?,
-        remarks: map['remarks'] as String?,
-        createdById: map['created_by'] as String?,
-        supplierName: map['supplier_name'] as String?,
-        purchaseBillNo: map['purchase_bill_no'] as String?,
-      );
+    return {
+      if (fiscalYearId.isNotEmpty) 'fiscalYearId': fiscalYearId,
+      'supplierId': supplierId,
+      'purchaseId': purchaseId,
+      'voucherNo': voucherNo,
+      'paymentDate': WireCodec.isoDate(paymentDate),
+      'paymentDateBs': paymentDateBs ?? NepaliDate.msToBs(paymentDate),
+      'paymentMode': paymentMode.value,
+      'amount': amount.toWire(),
+      'chequeNo': isCheque ? chequeNo : null,
+      // A cheque handed over with no date written on it is dated the day it
+      // changed hands, which is what the register then plans around — and the
+      // server requires one, so there is nowhere for a blank to go.
+      'chequeDate':
+          isCheque ? WireCodec.isoDate(chequeDate ?? paymentDate) : null,
+      'chequeDateBs': isCheque
+          ? (chequeDateBs ?? NepaliDate.msToBs(chequeDate ?? paymentDate))
+          : null,
+      'referenceNo': paymentMode.hasReference ? referenceNo : null,
+      'description': description,
+      'remarks': remarks,
+    };
+  }
 
   SupplierPayment copyWith({
-    String? fiscalYearId,
-    String? supplierId,
     String? purchaseId,
     String? voucherNo,
     int? paymentDate,
@@ -194,21 +186,14 @@ class SupplierPayment extends SyncableModel {
     PaymentStatus? status,
     String? description,
     String? remarks,
-    String? createdById,
-    int? updatedAt,
-    bool? isDeleted,
-    SyncStatus? syncStatus,
-    String? deviceId,
     String? supplierName,
     String? purchaseBillNo,
     bool clearClearedDate = false,
   }) =>
       SupplierPayment(
         id: id,
-        createdAt: createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-        fiscalYearId: fiscalYearId ?? this.fiscalYearId,
-        supplierId: supplierId ?? this.supplierId,
+        fiscalYearId: fiscalYearId,
+        supplierId: supplierId,
         purchaseId: purchaseId ?? this.purchaseId,
         voucherNo: voucherNo ?? this.voucherNo,
         paymentDate: paymentDate ?? this.paymentDate,
@@ -219,52 +204,18 @@ class SupplierPayment extends SyncableModel {
         chequeDate: chequeDate ?? this.chequeDate,
         chequeDateBs: chequeDateBs ?? this.chequeDateBs,
         referenceNo: referenceNo ?? this.referenceNo,
-        // `clearedDate: null` cannot mean "clear it" — that is indistinguishable
-        // from not passing the argument at all. Cancelling a payment genuinely
-        // needs to unset the date, so it says so explicitly.
+        // `clearedDate: null` cannot mean "clear it" — that is
+        // indistinguishable from not passing the argument at all. Cancelling a
+        // payment genuinely needs to unset the date, so it says so explicitly.
         clearedDate:
             clearClearedDate ? null : (clearedDate ?? this.clearedDate),
         status: status ?? this.status,
         description: description ?? this.description,
         remarks: remarks ?? this.remarks,
-        createdById: createdById ?? this.createdById,
-        isDeleted: isDeleted ?? this.isDeleted,
-        syncStatus: syncStatus ?? this.syncStatus,
-        deviceId: deviceId ?? this.deviceId,
+        createdById: createdById,
         supplierName: supplierName ?? this.supplierName,
         purchaseBillNo: purchaseBillNo ?? this.purchaseBillNo,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
       );
-
-  static const String createTableSql = '''
-    CREATE TABLE IF NOT EXISTS ${DbTables.supplierPayment} (
-      id              TEXT PRIMARY KEY,
-      fiscal_year_id  TEXT NOT NULL,
-      supplier_id     TEXT NOT NULL,
-      purchase_id     TEXT,
-      voucher_no      TEXT,
-      payment_date    INTEGER NOT NULL,
-      payment_date_bs TEXT,
-      payment_mode    TEXT NOT NULL,
-      amount          INTEGER NOT NULL DEFAULT 0,
-      cheque_no       TEXT,
-      cheque_date     INTEGER,
-      cheque_date_bs  TEXT,
-      reference_no    TEXT,
-      cleared_date    INTEGER,
-      status          TEXT NOT NULL DEFAULT 'CLEARED',
-      description     TEXT,
-      remarks         TEXT,
-      created_by      TEXT,
-      ${SyncColumns.definition}
-    )
-  ''';
-
-  /// Mirrors `supplier_payments_fy_voucher_no_key`. Partial on `voucher_no IS
-  /// NOT NULL`, because most payments have no voucher number and any number of
-  /// those is fine.
-  static const String uniqueVoucherSql = '''
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_payment_fy_voucher
-      ON ${DbTables.supplierPayment} (fiscal_year_id, voucher_no)
-      WHERE voucher_no IS NOT NULL AND is_deleted = 0
-  ''';
 }

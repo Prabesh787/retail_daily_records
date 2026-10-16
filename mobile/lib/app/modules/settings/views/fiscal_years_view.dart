@@ -216,7 +216,7 @@ class _FiscalYearFormState extends State<_FiscalYearForm> {
   /// conversion rather than assumed to be a fixed number of days — the months
   /// vary in length and the years do too.
   ({String name, int start, int end}) _suggest() {
-    final todayBs = NepaliDate.msToBs(AppDateUtils.startOfTodayMs());
+    final todayBs = NepaliDate.msToBs(AppDateUtils.todayMs());
     final year = int.tryParse(todayBs?.split('-').first ?? '') ?? 2082;
 
     final start = NepaliDate.bsToMs('$year-01-01');
@@ -224,10 +224,10 @@ class _FiscalYearFormState extends State<_FiscalYearForm> {
 
     return (
       name: '$year/${(year + 1) % 100}',
-      start: start ?? AppDateUtils.startOfTodayMs(),
+      start: start ?? AppDateUtils.todayMs(),
       // The day before the next year opens, so the two meet with no gap and no
       // overlap — a record dated on the boundary must land in exactly one.
-      end: (nextStart ?? AppDateUtils.startOfTodayMs()) - 1,
+      end: (nextStart ?? AppDateUtils.todayMs()) - 1,
     );
   }
 
@@ -283,8 +283,7 @@ class _FiscalYearFormState extends State<_FiscalYearForm> {
               Navigator.of(context).pop(
                 FiscalYear(
                   id: '',
-                  createdAt: 0,
-                  updatedAt: 0,
+
                   name: name,
                   startDate: _start,
                   endDate: _end,

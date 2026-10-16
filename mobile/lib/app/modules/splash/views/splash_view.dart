@@ -26,7 +26,7 @@ class SplashView extends GetView<SplashController> {
             ),
             AppSizes.gapXs,
             Text(
-              'Works offline. Syncs when it can.',
+              'Your shop, its bills and what you owe.',
               style: AppTextStyles.caption.copyWith(color: Colors.white70),
             ),
           ],

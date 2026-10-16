@@ -7,12 +7,12 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_card.dart';
 import '../controllers/login_controller.dart';
 
-/// The front door.
+/// The front door, and there is no way around it.
 ///
-/// Signing in is **optional**: the shop's records live on this device whether
-/// or not there is an account, so the screen always offers a way past itself.
-/// An account is what lets those records reach the server and a second phone —
-/// nothing more, and the copy says so rather than implying a wall.
+/// The shop's records live on the server, and one backend serves several shops
+/// — so without an account the app does not know whose books to open, and has
+/// nothing to show. Every other screen is behind the route guard for that
+/// reason.
 class LoginView extends GetView<LoginController> {
   const LoginView({super.key});
 

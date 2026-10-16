@@ -1,7 +1,7 @@
-import '../../core/constants/db_constants.dart';
+import '../../core/constants/entities.dart';
 import '../../core/domain/money.dart';
-import '../../core/utils/date_utils.dart';
 import '../../core/domain/trend_point.dart';
+import '../../core/utils/nepali_date.dart';
 import '../models/purchase.dart';
 import '../models/sale.dart';
 import '../models/supplier.dart';
@@ -10,72 +10,22 @@ import 'base_repository.dart';
 
 /// The dashboard's single read.
 ///
-/// Composes queries the other screens already own rather than adding new ones —
-/// which is the whole reason this screen was built last. Every figure here has
-/// a screen behind it that shows the rows it came from, and because both read
-/// the same repository method, tapping through can never land on a different
-/// number than the card that sent you.
+/// One call, because the server already assembles this: today's takings, the
+/// trend, what is owed, the cheques coming due and the latest records all come
+/// out of `GET /reports/dashboard` together. Seven separate requests would give
+/// the screen seven chances to be half-drawn, and a dashboard that fills in
+/// piecemeal reads as broken on exactly the slow phone this app is for.
+///
+/// Every figure here has a screen behind it that shows the rows it came from,
+/// and both read the same derivation on the server — so tapping through can
+/// never land on a different number than the card that sent you.
 class DashboardRepository extends BaseRepository {
   @override
-  String get entity => DbTables.sale;
+  String get entity => Entities.sale;
 
-  /// Everything on the dashboard, in one call.
-  ///
-  /// Deliberately one method and one await point. Seven separate loads would
-  /// give the screen seven chances to be half-drawn, and a dashboard that fills
-  /// in piecemeal reads as broken on exactly the slow phone this app is for.
   Future<DashboardData> load({int trendDays = 14}) async {
-    final todayStart = AppDateUtils.startOfTodayMs();
-    final todayEnd = AppDateUtils.endOfTodayMs();
-
-    // The window is inclusive of today, so 14 days means 13 back plus today —
-    // an off-by-one here would silently drop today from its own trend.
-    final trendFrom = AppDateUtils.daysAgoMs(trendDays - 1);
-
-    final today = await dbService.sales.dayBook(todayStart);
-    final dailyTotals = await dbService.sales.dailyTotals(trendFrom, todayEnd);
-    final payable = await dbService.suppliers.payable();
-    final topOwed = await dbService.suppliers.topOutstanding(limit: 4);
-    final uncleared = await dbService.supplierPayments.uncleared();
-    final dueCheques = await dbService.supplierPayments.chequeRegister(
-      onlyPending: true,
-      limit: 1,
-    );
-    final latestSales = await dbService.sales.all(limit: 3);
-    final latestBills = await dbService.purchases.all(limit: 3);
-
-    return DashboardData(
-      todaySales: today.total,
-      todayCount: today.count,
-      todayReceived: Money.sum(today.sales.map((s) => s.settledTotal)),
-      trend: _trend(dailyTotals, trendFrom, trendDays),
-      payableTotal: payable.total,
-      payableSupplierCount: payable.supplierCount,
-      unclearedTotal: uncleared.total,
-      unclearedCount: uncleared.count,
-      nextCheque: dueCheques.isEmpty ? null : dueCheques.first,
-      topOwed: topOwed,
-      latestSales: latestSales,
-      latestBills: latestBills,
-    );
-  }
-
-  /// One point per day across the window, zeros included.
-  ///
-  /// The DAO returns only days that had sales. Plotting those alone would draw
-  /// a line that skips the quiet days entirely and makes a bad week look like a
-  /// steady one — the gaps are the information.
-  List<TrendPoint> _trend(Map<int, Money> totals, int fromMs, int days) {
-    final start = AppDateUtils.startOfDay(AppDateUtils.fromMs(fromMs));
-
-    return [
-      for (var i = 0; i < days; i++)
-        () {
-          final day = AppDateUtils.startOfDay(start.add(Duration(days: i)));
-          final ms = day.millisecondsSinceEpoch;
-          return TrendPoint(dateMs: ms, amount: totals[ms] ?? Money.zero);
-        }(),
-    ];
+    final response = await api.dashboard(query: {'trendDays': trendDays});
+    return DashboardData.fromJson(response.object);
   }
 }
 
@@ -96,9 +46,62 @@ class DashboardData {
     this.nextCheque,
   });
 
+  factory DashboardData.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic> section(String key) =>
+        json[key] is Map<String, dynamic>
+            ? json[key] as Map<String, dynamic>
+            : const {};
+
+    List<Map<String, dynamic>> list(Object? value) => (value as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+
+    final today = section('today');
+    final payable = section('payable');
+    final cheques = section('cheques');
+    final next = list(cheques['next']);
+
+    return DashboardData(
+      todaySales: Money.fromWire(today['salesTotal']),
+      todayReceived: Money.fromWire(today['receivedTotal']),
+      todayCount: (today['salesCount'] as num?)?.toInt() ?? 0,
+      trend: list(json['trend']).map(_trendPoint).toList(),
+      payableTotal: Money.fromWire(payable['total']),
+      payableSupplierCount: (payable['supplierCount'] as num?)?.toInt() ?? 0,
+      unclearedTotal: Money.fromWire(cheques['total']),
+      unclearedCount: (cheques['count'] as num?)?.toInt() ?? 0,
+      nextCheque: next.isEmpty ? null : SupplierPayment.fromJson(next.first),
+      topOwed: list(payable['top']).map(_owedSupplier).toList(),
+      latestSales: list(json['recentSales']).map(Sale.fromJson).toList(),
+      latestBills: list(json['recentPurchases']).map(Purchase.fromJson).toList(),
+    );
+  }
+
+  /// One point per day across the window, zeros included.
+  ///
+  /// The report fills the quiet days in rather than omitting them, which is
+  /// what stops the line skipping the gaps and making a bad week look steady —
+  /// the gaps are the information.
+  static TrendPoint _trendPoint(Map<String, dynamic> json) => TrendPoint(
+        dateMs:
+            NepaliDate.parseIsoDate(json['date']?.toString() ?? '')
+                    ?.millisecondsSinceEpoch ??
+                0,
+        amount: Money.fromWire(json['amount']),
+      );
+
+  /// The payable section nests the balance beside the supplier rather than
+  /// inside it, so the two are folded back together into the one shape every
+  /// other supplier row in the app already has.
+  static Supplier _owedSupplier(Map<String, dynamic> json) {
+    final supplier = json['supplier'];
+    if (supplier is! Map<String, dynamic>) return Supplier.fromJson(json);
+    return Supplier.fromJson({...supplier, 'balance': json['balance']});
+  }
+
   /// Sold today, credit included. [todayReceived] is what was actually taken —
-  /// the same distinction the day book makes, kept here so the dashboard
-  /// cannot quietly claim credit sales as cash.
+  /// the same distinction the day book makes, kept here so the dashboard cannot
+  /// quietly claim credit sales as cash.
   final Money todaySales;
   final Money todayReceived;
   final int todayCount;

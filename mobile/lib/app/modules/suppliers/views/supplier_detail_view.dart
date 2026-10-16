@@ -7,7 +7,7 @@ import '../../../core/extensions/context_ext.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/domain/domain_widgets.dart';
 import '../../../core/widgets/widgets.dart';
-import '../../../data/providers/local/supplier_dao.dart';
+import '../../../data/models/supplier.dart';
 import '../../../data/repositories/supplier_repository.dart';
 import '../controllers/supplier_detail_controller.dart';
 

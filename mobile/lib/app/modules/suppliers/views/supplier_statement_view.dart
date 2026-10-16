@@ -9,7 +9,7 @@ import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/domain/domain_widgets.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../data/enums/payment_status.dart';
-import '../../../data/providers/local/supplier_dao.dart';
+import '../../../data/models/supplier.dart';
 import '../../../data/repositories/supplier_repository.dart';
 import '../controllers/supplier_statement_controller.dart';
 

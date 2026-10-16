@@ -8,9 +8,9 @@ import '../theme/app_text_styles.dart';
 /// The one place the app asks a question it will act on.
 ///
 /// A dialog rather than a toast or an undo, because the actions behind it —
-/// voiding a bill, cancelling a cheque — are accounting events that propagate
-/// through sync to every other device. Undo after the fact is not available, so
-/// the question has to come first.
+/// voiding a bill, cancelling a cheque — are accounting events that land on
+/// the server for everyone who opens the shop's books. There is no undo after
+/// the fact, so the question has to come first.
 class ConfirmDialog {
   ConfirmDialog._();
 

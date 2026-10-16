@@ -251,7 +251,7 @@ class Quantity implements Comparable<Quantity> {
 /// The single place a line amount is ever produced, mirroring
 /// `calculateLineAmount` in the backend — which likewise ignores whatever
 /// `amount` a client sends and recomputes it. Both sides must agree digit for
-/// digit, or a sale's total will not match its own lines after a sync.
+/// digit, or a sale's total will not match its own lines after a round trip.
 ///
 /// Quantity carries 3 dp and price 2 dp, so their product is exact at 5 dp; it
 /// is rounded to paisa **once**, after the discount comes off, exactly as

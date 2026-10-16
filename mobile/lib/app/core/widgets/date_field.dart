@@ -40,14 +40,16 @@ class DateField extends StatelessWidget {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: AppDateUtils.fromMs(value),
+      initialDate: AppDateUtils.dayOf(value),
       // The shop's records do not predate the app by years, and a picker that
       // scrolls back to 1900 buries the dates anyone actually enters.
       firstDate: firstDate ?? DateTime(now.year - 5),
       lastDate: lastDate ?? DateTime(now.year + 1, 12, 31),
     );
 
-    if (picked != null) onChanged(picked.millisecondsSinceEpoch);
+    // The day that was tapped, not the instant it began locally — see
+    // [AppDateUtils] for why the two are not the same value.
+    if (picked != null) onChanged(AppDateUtils.dayMs(picked));
   }
 
   @override

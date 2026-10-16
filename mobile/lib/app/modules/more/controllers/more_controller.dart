@@ -25,8 +25,8 @@ class MoreController extends GetxController {
   Future<void> signOut() async {
     final confirmed = await ConfirmDialog.show(
       title: 'Sign out?',
-      message: 'Anything not yet synced stays on this device and will go up '
-          'the next time you sign in.',
+      message: 'Your records stay on the server. Sign in again on this phone '
+          'or any other to get back to them.',
       confirmLabel: 'Sign out',
       isDestructive: true,
     );

@@ -2,7 +2,7 @@
 ///
 /// A direct port of `backend/src/common/utils/nepali-date.js`. The two
 /// implementations **must** agree: the shop reads BS, the database sorts on AD,
-/// and a report rendered offline on the phone has to match the same report
+/// and a report rendered on the phone has to match the same report
 /// rendered by the server. `test/nepali_date_test.dart` checks that against a
 /// golden fixture generated from the JS, so a drift is a failing test rather
 /// than a date that is quietly one day out.

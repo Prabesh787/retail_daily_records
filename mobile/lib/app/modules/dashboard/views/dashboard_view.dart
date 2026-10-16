@@ -10,7 +10,6 @@ import '../../../core/widgets/widgets.dart';
 import '../../../data/models/supplier_payment.dart';
 import '../../../data/repositories/dashboard_repository.dart';
 import '../controllers/dashboard_controller.dart';
-import '../widgets/sync_status_chip.dart';
 
 /// The home screen.
 ///
@@ -27,12 +26,6 @@ class DashboardView extends GetView<DashboardController> {
       title: controller.greeting,
       eyebrow: controller.shopName,
       onRefresh: controller.reload,
-      actions: const [
-        Padding(
-          padding: EdgeInsets.only(right: AppSizes.lg),
-          child: Center(child: SyncStatusChip()),
-        ),
-      ],
       child: Obx(() {
         if (controller.isLoading.value) {
           return const Column(

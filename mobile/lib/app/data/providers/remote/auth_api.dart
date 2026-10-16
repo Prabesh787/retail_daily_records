@@ -3,9 +3,6 @@ import '../../models/app_user.dart';
 import 'api_client.dart';
 
 /// The three auth calls the app makes.
-///
-/// The API wraps every response in `{ success, message, data }`; unwrapping
-/// happens here so nothing above this layer knows the envelope exists.
 class AuthApi {
   const AuthApi(this._client);
 
@@ -21,12 +18,12 @@ class AuthApi {
     required String email,
     required String password,
   }) async {
-    final json = await _client.post(
+    final response = await _client.post(
       '/auth/login',
       body: {'email': email.trim().toLowerCase(), 'password': password},
     );
 
-    final data = _unwrap(json);
+    final data = response.object;
     final token = data['token'];
     if (token is! String || token.isEmpty) {
       throw const NetworkException('The server did not return a sign-in token.');
@@ -34,18 +31,11 @@ class AuthApi {
     return (token: token, user: AppUser.fromJson(data));
   }
 
-  Future<AppUser> me() async {
-    return AppUser.fromJson(_unwrap(await _client.get('/auth/me')));
-  }
+  Future<AppUser> me() async =>
+      AppUser.fromJson((await _client.get('/auth/me')).object);
 
   /// Only the keys sent are written, so the shop form can leave the account
   /// name alone.
-  Future<AppUser> updateMe(Map<String, dynamic> body) async {
-    return AppUser.fromJson(_unwrap(await _client.patch('/auth/me', body: body)));
-  }
-
-  Map<String, dynamic> _unwrap(Map<String, dynamic> json) {
-    final data = json['data'];
-    return data is Map<String, dynamic> ? data : json;
-  }
+  Future<AppUser> updateMe(Map<String, dynamic> body) async =>
+      AppUser.fromJson((await _client.patch('/auth/me', body: body)).object);
 }

@@ -8,27 +8,21 @@ import 'app/data/providers/remote/api_client.dart';
 import 'app/data/providers/remote/auth_api.dart';
 import 'app/routes/app_pages.dart';
 import 'app/services/auth_service.dart';
-import 'app/services/connectivity_service.dart';
 import 'app/services/data_change_service.dart';
-import 'app/services/database_service.dart';
 import 'app/services/storage_service.dart';
-import 'app/services/sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Services are awaited before the first frame: no screen can render against a
-  // database that is not open or settings that are not loaded. Order matters -
-  // SyncService reads the others.
+  // Awaited before the first frame: no screen can render against settings that
+  // are not loaded or a session that has not been read back yet. Order matters
+  // — AuthService reads the storage and the client.
   Get.put(DataChangeService(), permanent: true);
   await Get.putAsync(() => StorageService().init(), permanent: true);
-  await Get.putAsync(() => DatabaseService().init(), permanent: true);
-  await Get.putAsync(() => ConnectivityService().init(), permanent: true);
 
-  // One HTTP client for auth and sync, so a token cleared by a 401 on either
-  // path is gone for both. Registered before AuthService because the service is
-  // built on it; the client resolves the service lazily, per request, which is
-  // what lets the two depend on each other.
+  // One HTTP client for the whole app. Registered before AuthService because
+  // the service is built on it; the client resolves the service lazily, per
+  // request, which is what lets the two depend on each other.
   Get.put(InitialBinding.buildApiClient(), permanent: true);
   Get.put(AuthApi(Get.find<ApiClient>()), permanent: true);
   await Get.putAsync(
@@ -37,8 +31,6 @@ Future<void> main() async {
   );
 
   InitialBinding().dependencies();
-
-  await Get.putAsync(() => SyncService().init(), permanent: true);
 
   runApp(const BillRecordApp());
 }

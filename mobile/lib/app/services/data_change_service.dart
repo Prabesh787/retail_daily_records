@@ -2,40 +2,39 @@ import 'dart:async';
 
 import 'package:get/get.dart';
 
-/// Announces that rows of an entity have changed, so open screens can reload.
+/// Announces that records of an entity have changed, so open screens reload.
 ///
 /// The web app gets this from React Query: a mutation invalidates a key and
-/// every mounted list refetches. There is no equivalent here, and the naive
-/// substitutes both fail in the cases that matter. Reloading in `onInit` misses
-/// a dashboard sitting behind the form that just saved a bill; reloading when a
-/// `Get.toNamed` returns misses rows that arrived from a **sync pull**, which
-/// nobody navigated for at all.
+/// every mounted list refetches. There is no equivalent in GetX, and the naive
+/// substitutes fail in exactly the cases that matter. Reloading in `onInit`
+/// misses a dashboard sitting behind the form that just saved a bill; reloading
+/// when a `Get.toNamed` returns misses a screen two tabs away that is showing
+/// the same figures.
 ///
-/// So the signal is attached to the write itself. Every local write goes
-/// through `BaseRepository.write`, and every remote row lands through the sync
-/// engine — both publish here, and a controller that has said which entities it
-/// shows gets told either way.
+/// So the signal is attached to the write itself. Every write goes through
+/// `BaseRepository.write`, which publishes here once the server has accepted
+/// it, and a controller that has said which entities it shows gets told.
 ///
-/// Entity names are the table names in [DbTables], which are also the wire
-/// names and the pull-cursor keys. One vocabulary for the whole data layer.
+/// Entity names are the ones in [Entities], which are also the API's path
+/// segments. One vocabulary for the whole data layer.
 class DataChangeService extends GetxService {
   static DataChangeService get to => Get.find();
 
   final StreamController<Set<String>> _controller =
       StreamController<Set<String>>.broadcast();
 
-  /// Batched rather than fired per row: a sync pull can land two hundred
-  /// purchases, and a list has no use for two hundred identical reloads.
+  /// Batched rather than fired per write: saving a sale touches the sale and
+  /// leaves three screens wanting a reload, and they have no use for three
+  /// separate rounds of it.
   final Set<String> _pending = <String>{};
   Timer? _flush;
 
   /// How long a burst of writes is allowed to coalesce. Short enough that a
-  /// save still feels immediate, long enough that a whole page of pulled rows
-  /// arrives as one event.
+  /// save still feels immediate, long enough that a form saving several things
+  /// in a row produces one event.
   static const Duration _window = Duration(milliseconds: 120);
 
-  /// Records that [entities] changed. Safe to call from anywhere, including
-  /// inside a transaction that has just committed.
+  /// Records that [entities] changed. Safe to call from anywhere.
   void publish(Iterable<String> entities) {
     if (_controller.isClosed) return;
     _pending.addAll(entities);

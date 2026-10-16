@@ -90,9 +90,8 @@ class ShopView extends GetView<ShopController> {
             AppSizes.gapMd,
 
             Text(
-              'These appear on statements and anything you share. Changes are '
-              'kept on this device straight away and go up the next time you '
-              'sync.',
+              'These appear on statements and anything you share, and follow '
+              'your account onto any phone you sign in on.',
               style: AppTextStyles.caption.copyWith(color: palette.inkSubtle),
             ),
             AppSizes.gapLg,

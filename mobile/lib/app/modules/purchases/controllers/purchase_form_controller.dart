@@ -32,7 +32,7 @@ class PurchaseFormController extends GetxController {
   final TextEditingController billDateBs = TextEditingController();
 
   final Rxn<Supplier> supplier = Rxn<Supplier>();
-  final RxInt billDate = AppDateUtils.startOfTodayMs().obs;
+  final RxInt billDate = AppDateUtils.todayMs().obs;
   final RxnString supplierError = RxnString();
   final RxBool isSaving = false.obs;
 
@@ -106,8 +106,7 @@ class PurchaseFormController extends GetxController {
       final saved = await _purchases.save(
         Purchase(
           id: '',
-          createdAt: 0,
-          updatedAt: 0,
+
           fiscalYearId: year.id,
           supplierId: supplier.value!.id,
           billNo: billNo.text.trim(),

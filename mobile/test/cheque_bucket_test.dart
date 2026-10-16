@@ -19,44 +19,42 @@ void main() {
     return 'later';
   }
 
-  int atHour(DateTime day, int hour) =>
-      DateTime(day.year, day.month, day.day, hour).millisecondsSinceEpoch;
+  /// A cheque date as the app actually holds one: a calendar day, built from a
+  /// moment part-way through it. The hour is what the old local-midnight
+  /// convention got wrong — east of UTC it landed the date on the day before.
+  int dueOn(DateTime day, {int hour = 12}) => AppDateUtils.dayMs(
+        DateTime(day.year, day.month, day.day, hour),
+      );
 
   final today = DateTime.now();
 
   test('a cheque dated today is due this week, not overdue', () {
-    expect(bucketFor(atHour(today, 9)), 'week');
+    expect(bucketFor(dueOn(today, hour: 9)), 'week');
   });
 
   test('the time of day does not move a cheque between buckets', () {
-    // daysUntil has to compare whole days. Comparing raw timestamps would put
-    // a cheque dated this morning into "overdue" by mid-afternoon.
-    expect(bucketFor(atHour(today, 0)), 'week');
-    expect(bucketFor(atHour(today, 23)), 'week');
+    // A date has no time of day, and this is what says so: the same calendar
+    // day keyed at midnight and at eleven at night is one date, not two.
+    expect(dueOn(today, hour: 0), dueOn(today, hour: 23));
+    expect(bucketFor(dueOn(today, hour: 0)), 'week');
+    expect(bucketFor(dueOn(today, hour: 23)), 'week');
   });
 
   test('yesterday is overdue', () {
-    expect(bucketFor(atHour(today.subtract(const Duration(days: 1)), 12)),
-        'overdue');
+    expect(bucketFor(dueOn(today.subtract(const Duration(days: 1)))), 'overdue');
   });
 
   test('the seventh day is still this week', () {
-    expect(
-      bucketFor(atHour(today.add(const Duration(days: 7)), 12)),
-      'week',
-    );
+    expect(bucketFor(dueOn(today.add(const Duration(days: 7)))), 'week');
   });
 
   test('the eighth day is later', () {
-    expect(
-      bucketFor(atHour(today.add(const Duration(days: 8)), 12)),
-      'later',
-    );
+    expect(bucketFor(dueOn(today.add(const Duration(days: 8)))), 'later');
   });
 
   test('a long-overdue cheque stays overdue', () {
     expect(
-      bucketFor(atHour(today.subtract(const Duration(days: 120)), 12)),
+      bucketFor(dueOn(today.subtract(const Duration(days: 120)))),
       'overdue',
     );
   });
@@ -64,9 +62,20 @@ void main() {
   test('daysUntil counts whole days, ignoring the clock', () {
     final tomorrow = today.add(const Duration(days: 1));
 
-    // Same day, twelve hours apart, must be the same number of days out.
-    expect(AppDateUtils.daysUntil(atHour(tomorrow, 1)), 1);
-    expect(AppDateUtils.daysUntil(atHour(tomorrow, 23)), 1);
-    expect(AppDateUtils.daysUntil(atHour(today, 23)), 0);
+    expect(AppDateUtils.daysUntil(dueOn(tomorrow, hour: 1)), 1);
+    expect(AppDateUtils.daysUntil(dueOn(tomorrow, hour: 23)), 1);
+    expect(AppDateUtils.daysUntil(dueOn(today, hour: 23)), 0);
+  });
+
+  /// The bug the whole day/instant split exists to prevent. Kathmandu is
+  /// UTC+05:45, so local midnight read as UTC is the previous day — a bill
+  /// dated the 17th would file itself under the 16th and leave the day book
+  /// short with nothing to say why.
+  test('a date is the day it was written, in any timezone', () {
+    final ms = AppDateUtils.dayMs(DateTime(2026, 8, 26, 0, 30));
+
+    expect(ms, DateTime.utc(2026, 8, 26).millisecondsSinceEpoch);
+    expect(AppDateUtils.dayOf(ms).day, 26);
+    expect(AppDateUtils.formatDate(ms), '26 Aug 2026');
   });
 }

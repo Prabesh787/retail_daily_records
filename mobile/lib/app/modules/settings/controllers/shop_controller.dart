@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/errors/app_exception.dart';
 import '../../../core/widgets/app_toast.dart';
 import '../../../data/models/app_user.dart';
 import '../../../services/auth_service.dart';
@@ -8,10 +9,10 @@ import '../../../services/storage_service.dart';
 
 /// The shop's own details — what goes on its paperwork.
 ///
-/// Held in two places on purpose. The server owns them, because they belong to
-/// the account and follow it onto a second device; [StorageService] keeps a
-/// copy, because the app is offline-first and a statement printed on a train
-/// still needs a shop name at the top.
+/// They belong to the account, so the server owns them and they follow the
+/// shopkeeper onto a second device. The currency symbol is the exception: it is
+/// how this phone draws an amount, not a fact about the business, so it stays
+/// here.
 class ShopController extends GetxController {
   final AuthService _auth = Get.find<AuthService>();
   final StorageService _storage = Get.find<StorageService>();
@@ -30,13 +31,11 @@ class ShopController extends GetxController {
   void onInit() {
     super.onInit();
 
-    // The server's copy wins where it has one; the local copy fills the gaps,
-    // which is what a first run offline leaves behind.
-    final shop = _auth.user.value?.shop;
-    name.text = shop?.name ?? _storage.shopName;
-    phone.text = shop?.phone ?? _storage.shopPhone ?? '';
-    address.text = shop?.address ?? _storage.shopAddress ?? '';
-    pan.text = shop?.pan ?? '';
+    final shop = _auth.shop;
+    name.text = shop.name ?? '';
+    phone.text = shop.phone ?? '';
+    address.text = shop.address ?? '';
+    pan.text = shop.pan ?? '';
     currency.text = _storage.currencySymbol;
   }
 
@@ -51,34 +50,26 @@ class ShopController extends GetxController {
 
     isSaving.value = true;
     try {
-      final shop = Shop(
-        name: name.text.trim(),
-        phone: _trimmed(phone),
-        address: _trimmed(address),
-        pan: _trimmed(pan),
+      await _auth.updateShop(
+        Shop(
+          name: name.text.trim(),
+          phone: _trimmed(phone),
+          address: _trimmed(address),
+          pan: _trimmed(pan),
+        ),
       );
 
-      // Local first, and unconditionally. The push can fail — no signal, or
-      // sync switched off entirely — and a shop that cannot rename itself
-      // while offline would be a strange thing in an offline-first app.
-      _storage
-        ..shopName = shop.name!
-        ..shopPhone = shop.phone
-        ..shopAddress = shop.address
-        ..currencySymbol = currency.text.trim().isEmpty
-            ? 'Rs.'
-            : currency.text.trim();
+      // Written only once the server has taken the rest, so the two halves of
+      // this form never end up half-saved.
+      _storage.currencySymbol =
+          currency.text.trim().isEmpty ? 'Rs.' : currency.text.trim();
 
-      try {
-        await _auth.updateShop(shop);
-        AppToast.success('Shop details saved');
-      } catch (_) {
-        // Deliberately not an error toast: the user's change *was* kept, and
-        // the next sync will carry it up.
-        AppToast.info('Saved on this device. It will go up when you sync.');
-      }
-
+      AppToast.success('Shop details saved');
       Get.back<void>();
+    } on AppException catch (e) {
+      AppToast.error(e.message);
+    } catch (e) {
+      AppToast.error('Could not save the shop details. $e');
     } finally {
       isSaving.value = false;
     }

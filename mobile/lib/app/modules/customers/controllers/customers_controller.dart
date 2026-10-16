@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/domain/money.dart';
 import '../../../data/models/customer.dart';
@@ -22,7 +22,7 @@ class CustomersController extends LoaderController<List<Customer>> {
   /// are derived from them, so a sale recorded elsewhere changes this list even
   /// though no customer row moved.
   @override
-  List<String> get watches => const [DbTables.customer, DbTables.sale];
+  List<String> get watches => const [Entities.customer, Entities.sale];
 
   List<Customer> get rows => data.value ?? const [];
 

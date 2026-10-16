@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../data/repositories/dashboard_repository.dart';
 import '../../../routes/app_pages.dart';
@@ -10,18 +10,18 @@ import '../../home/controllers/home_controller.dart';
 /// The home screen.
 ///
 /// Watches everything, because it summarises everything: a bill saved on
-/// another tab, a cheque cleared two screens deep, or a row pulled down by sync
-/// all change what this screen is claiming. It is the one place in the app
-/// where watching every entity is the correct answer rather than a lazy one.
+/// another tab or a cheque cleared two screens deep changes what this screen
+/// is claiming. It is the one place in the app where watching every entity is
+/// the correct answer rather than a lazy one.
 class DashboardController extends LoaderController<DashboardData> {
   final DashboardRepository _dashboard = Get.find<DashboardRepository>();
 
   @override
   List<String> get watches => const [
-    DbTables.sale,
-    DbTables.purchase,
-    DbTables.supplier,
-    DbTables.supplierPayment,
+    Entities.sale,
+    Entities.purchase,
+    Entities.supplier,
+    Entities.supplierPayment,
   ];
 
   DashboardData? get board => data.value;

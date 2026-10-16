@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:billrecord/app/core/domain/money.dart';
 import 'package:billrecord/app/core/theme/app_theme.dart';
 import 'package:billrecord/app/core/utils/date_utils.dart';
@@ -20,6 +22,8 @@ import 'package:billrecord/app/modules/dashboard/bindings/dashboard_binding.dart
 import 'package:billrecord/app/modules/dashboard/views/dashboard_view.dart';
 import 'package:billrecord/app/modules/customers/views/customer_form_view.dart';
 import 'package:billrecord/app/modules/customers/views/customers_view.dart';
+import 'package:billrecord/app/modules/home/bindings/home_binding.dart';
+import 'package:billrecord/app/modules/home/views/home_view.dart';
 import 'package:billrecord/app/modules/more/controllers/more_controller.dart';
 import 'package:billrecord/app/modules/more/views/more_view.dart';
 import 'package:billrecord/app/modules/payments/bindings/payments_binding.dart';
@@ -47,6 +51,7 @@ import 'package:billrecord/app/modules/suppliers/views/supplier_form_view.dart';
 import 'package:billrecord/app/modules/suppliers/views/supplier_statement_view.dart';
 import 'package:billrecord/app/modules/suppliers/views/suppliers_view.dart';
 import 'package:billrecord/app/routes/app_pages.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
@@ -74,7 +79,7 @@ void main() {
   setUp(() async => app = await TestApp.start());
   tearDown(() async => app.dispose());
 
-  final int today = AppDateUtils.startOfTodayMs();
+  final int today = AppDateUtils.todayMs();
 
   // ---- Seed data ----------------------------------------------------------
 
@@ -145,8 +150,6 @@ void main() {
       payments: [
         SalePayment(
           id: '',
-          saleId: '',
-          createdAt: 0,
           paymentMode: SalePaymentMode.cash,
           amount: Money.fromWire('2500.00'),
         ),
@@ -446,6 +449,58 @@ void main() {
       expect(find.text('TAKINGS'), findsOneWidget);
       // The bill dated the same day is the half a sales-only screen would miss.
       expect(find.textContaining('BILLS TAKEN ON'), findsOneWidget);
+    });
+  });
+
+  // ---- The shell ----------------------------------------------------------
+
+  /// The tab shell is the one place several screens are mounted at once, and
+  /// that is a state no single-screen test can reach. It hid a real crash: the
+  /// `IndexedStack` builds all five destinations, three of them carry a FAB,
+  /// and every FAB took Flutter's default hero tag — so opening any detail
+  /// screen threw "multiple heroes share the same tag" while the framework
+  /// walked the shell for heroes.
+  group('the tab shell', () {
+    testWidgets('mounts every destination without a duplicate hero tag', (
+      tester,
+    ) async {
+      final year = await seed(tester, seedYear);
+      final supplier = await seed(tester, seedSupplier);
+      await seed(tester, () => seedBill(year.id, supplier.id));
+      await seed(tester, () => seedSale(year.id));
+
+      await pumpScreen(tester, const HomeView(), binding: HomeBinding());
+
+      // The invariant the framework asserts, checked directly: within one
+      // route subtree, no tag may appear twice.
+      final tags =
+          tester.widgetList<Hero>(find.byType(Hero)).map((h) => h.tag).toList();
+
+      expect(
+        tags.length,
+        tags.toSet().length,
+        reason: 'two heroes in the shell share a tag: $tags',
+      );
+    });
+
+    testWidgets('opening a record from a tab does not throw', (tester) async {
+      final year = await seed(tester, seedYear);
+      final sale = await seed(tester, () => seedSale(year.id));
+
+      await pumpScreen(tester, const HomeView(), binding: HomeBinding());
+
+      // Pushing is what makes the framework collect heroes from the route
+      // being left, which is where the exception surfaced.
+      unawaited(
+        Get.toNamed<void>(
+              Routes.saleDetail,
+              arguments: {RouteArgs.saleId: sale.id},
+            ) ??
+            Future.value(),
+      );
+      await settle(tester);
+
+      expect(tester.takeException(), isNull);
     });
   });
 

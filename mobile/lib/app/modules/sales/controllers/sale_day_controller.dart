@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../data/models/purchase.dart';
@@ -22,9 +22,9 @@ class SaleDayController extends LoaderController<DayBook> {
 
   @override
   List<String> get watches => const [
-    DbTables.sale,
-    DbTables.purchase,
-    DbTables.supplierPayment,
+    Entities.sale,
+    Entities.purchase,
+    Entities.supplierPayment,
   ];
 
   DayBook? get book => data.value;
@@ -35,12 +35,12 @@ class SaleDayController extends LoaderController<DayBook> {
     final passed = args is Map ? args[RouteArgs.dateMs] as int? : null;
 
     // Defaults to today, so the route is a usable deep link on its own.
-    dateMs = passed ?? AppDateUtils.startOfTodayMs();
+    dateMs = passed ?? AppDateUtils.todayMs();
     super.onInit();
   }
 
   @override
-  Future<DayBook> fetch() => _sales.dayBookFull(dateMs);
+  Future<DayBook> fetch() => _sales.dayBook(dateMs);
 
   void openSale(Sale sale) => Get.toNamed<void>(
     Routes.saleDetail,

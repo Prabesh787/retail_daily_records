@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/widgets/app_toast.dart';
@@ -19,7 +19,7 @@ class FiscalYearsController extends LoaderController<List<FiscalYear>> {
   final RxBool isSaving = false.obs;
 
   @override
-  List<String> get watches => const [DbTables.fiscalYear];
+  List<String> get watches => const [Entities.fiscalYear];
 
   List<FiscalYear> get rows => data.value ?? const [];
 

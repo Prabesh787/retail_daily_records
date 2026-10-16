@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/widgets/app_toast.dart';
@@ -16,7 +16,7 @@ class SaleDetailController extends LoaderController<Sale> {
   late final String saleId;
 
   @override
-  List<String> get watches => const [DbTables.sale];
+  List<String> get watches => const [Entities.sale];
 
   Sale? get sale => data.value;
 

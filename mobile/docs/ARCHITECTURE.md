@@ -1,7 +1,8 @@
 # Architecture
 
-Offline-first Flutter + GetX. SQLite is the source of truth on the device;
-sync is a background reconciliation with whatever backend gets chosen.
+Online Flutter + GetX against the Express API in `backend/`. The server is the
+source of truth; the app reads and writes it directly, the same way the web
+frontend does.
 
 ```
 lib/
@@ -11,75 +12,81 @@ lib/
     │   └── widgets/                the shared kit — generic pieces
     │       └── domain/             …and the ones that know a bill from a sale
     ├── data/
-    │   ├── models/                 local domain objects (+ their CREATE TABLE)
-    │   ├── dto/                    wire format ⇄ model. The insulation layer.
+    │   ├── models/                 domain objects, read from and written to JSON
+    │   ├── dto/                    WireCodec — tolerant readers for the wire
     │   ├── enums/
-    │   ├── providers/
-    │   │   ├── local/              DAOs + schema. All SQL lives here.
-    │   │   └── remote/             SyncApi contract + Rest/Fake/Noop adapters
-    │   ├── repositories/           the only layer that writes
-    │   └── sync/                   engine, conflict rules, entity syncers
-    ├── services/                   GetxServices: db, storage, connectivity, sync
+    │   ├── providers/remote/       ApiClient, RetailApi, AuthApi
+    │   └── repositories/           what a controller is allowed to call
+    ├── services/                   GetxServices: auth, storage, change bus
     ├── routes/                     app_routes.dart + app_pages.dart
     ├── bindings/                   global DI
     └── modules/                    one folder per screen group
-        └── <module>/{bindings,controllers,views,widgets}
+        └── <module>/{bindings,controllers,views}
 ```
 
 ## The rules that hold it together
 
-**Controllers never touch a DAO.** They call repositories; repositories call
-DAOs. Swapping the local store or adding a server call touches one layer.
+**Controllers never touch the API.** They call repositories; repositories call
+`RetailApi`. A path or a query parameter appears in exactly one layer.
 
-**Every write is a transaction containing the row *and* its outbox entry.**
-`BaseRepository.write()` enforces this. It is the entire offline guarantee: if
-the bill exists locally, the change to push exists too. A crash between the two
-is impossible.
+**One vocabulary for both clients.** `RetailApi` mirrors the web app's
+`frontend/src/lib/api/index.js` endpoint for endpoint, and `ApiClient` mirrors
+its `http.js`. Two clients against one API drift apart the moment each invents
+its own paths, and the drift is invisible until a field is renamed on one side.
 
-**Bills and payments are append-only.** A mistake is voided and re-issued, not
-edited. That is correct accounting, and it is also why sync stays simple —
-an immutable row cannot conflict. Genuine conflicts are limited to master data
-(a party's phone number, an item's price), where last-write-wins is fine.
+**Derived numbers come from the server.** Party balances, a bill's paid total, a
+sale's totals, every report figure — all derived from the documents by the
+backend and read here, never recomputed. The arithmetic is simple enough to
+repeat, and that is exactly the danger: two implementations of one sum are two
+chances for the balance card and the ledger under it to disagree.
 
-**Derived numbers are derived.** Party balances and every report figure are SQL
-aggregates over the documents, never stored totals. A stored balance drifts the
-moment a bill is voided or a row arrives out of order from sync.
+The exceptions are deliberate and local: the running balance down a supplier
+statement, and the day book's split of takings by settlement mode. Both are
+presentation of rows already fetched, and both are covered by tests.
+
+**A date is a day, an instant is an instant.** Document dates are held as the
+epoch millis of *UTC midnight*, which is what the API's `YYYY-MM-DD` parses to;
+timestamps are local. `AppDateUtils` keeps the two apart, and the reason is
+concrete: Kathmandu is UTC+05:45, so a local midnight read as UTC lands on the
+previous day, and a bill dated the 17th would file itself under the 16th.
+
+**Validation the form can answer, it answers.** An empty field or a zero amount
+is refused before a request. Anything that needs the books to answer it — a
+duplicate bill number, a supplier that still has history — is the server's to
+refuse, and its message is written for a shopkeeper and shown as it is.
+`ValidationException` carries the per-field messages; `NetworkException` means
+try again.
+
+**A write announces itself.** `BaseRepository.write` publishes to
+`DataChangeService` once the server has accepted the change, and a controller
+declares which entities it shows. This is the GetX equivalent of React Query
+invalidating a key: it is what reloads the dashboard sitting behind the form
+that just saved a bill.
 
 **The widget kit has two halves, and only one of them knows the domain.**
 `core/widgets/` is generic — a row, a badge, a sheet — and imports no model.
 `core/widgets/domain/` is where a `Purchase` becomes a `PurchaseRow`. The split
-is what keeps the generic half restyleable without dragging the data layer
-behind it, and it mirrors the web app's `ui/` and `domain/` folders so a change
-to one has an obvious counterpart in the other. Rows never navigate: the same
-row appears in a list and in a picker, so the screen passes what a tap means.
-
-**Ids are UUIDs generated on the device.** Not server auto-increments — an
-offline-created bill has to be addressable, and its items have to reference it,
-before it has ever seen a network.
-
-**Deletes are soft.** A hard delete is invisible to other clients, which then
-resurrect the row. Tombstones propagate; hard deletes do not.
-
-## Sync in one paragraph
-
-The user saves → SQLite commits → a row lands in `sync_queue` → the UI updates.
-Later, `SyncService` triggers `SyncEngine` (on reconnect, app resume, manual
-refresh, or a 15-minute backstop). The engine pushes the outbox oldest-first,
-then pulls each entity's changes since its cursor, applying
-`ConflictResolver`'s verdict per row. Failures increment a retry counter rather
-than dropping work, and the dashboard chip always says what is outstanding.
-
-See [BACKEND_CONTRACT.md](BACKEND_CONTRACT.md) for the server side.
+keeps the generic half restyleable, and it mirrors the web app's `ui/` and
+`domain/` folders so a change to one has an obvious counterpart in the other.
 
 ## Running it
 
 ```bash
-flutter run                                            # local only
-flutter run --dart-define=API_BASE_URL=https://…       # with sync
-flutter test                                           # 124 tests, no backend needed
+flutter run                                                 # Android emulator
+flutter run --dart-define=API_BASE_URL=https://…/api/v1     # anywhere else
+flutter test                                                # no backend needed
 ```
 
-Windows desktop works for development — `DbHelper` switches to the sqflite FFI
-factory automatically. Web is not supported: `dart:io` and `sqflite` do not
-compile there, so a web target would need `sqflite_common_ffi_web` and a guard
-around the platform check.
+`API_BASE_URL` includes the version prefix and defaults to
+`http://10.0.2.2:4000/api/v1` — the Android emulator's route to a backend on the
+development machine, so `flutter run` works the way `npm run dev` does for the
+web app. On a physical device or the iOS simulator, pass the machine's LAN
+address. Start the backend with `npm run dev` in `backend/`.
+
+The tests need no backend: `test/helpers/fake_backend.dart` is a small in-memory
+implementation of the API plugged in as Dio's transport, so every layer above it
+— the client, the models, the repositories, the screens — is the shipping one.
+See `test/screens_test.dart`, which mounts every screen against it.
+
+Web is untested but no longer blocked: nothing in the app imports `dart:io` or a
+platform database any more.

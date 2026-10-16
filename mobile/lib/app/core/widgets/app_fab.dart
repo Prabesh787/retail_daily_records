@@ -28,6 +28,19 @@ class AppFab extends StatelessWidget {
 
     return FloatingActionButton.extended(
       onPressed: onPressed,
+      // No hero, and it has to be none rather than a tag of its own.
+      //
+      // The tab shell holds all five destinations in an `IndexedStack`, so
+      // every screen's FAB is mounted at once — three of them, all carrying
+      // Flutter's `<default FloatingActionButton tag>`. Pushing any detail
+      // screen makes the framework walk the shell for heroes, it finds three
+      // with one tag, and it throws.
+      //
+      // A per-screen tag would fix that and quietly break again the day two
+      // screens picked the same label. Nothing here flies between routes — no
+      // detail screen has a FAB to fly to — so the animation is not being
+      // given up for anything.
+      heroTag: null,
       backgroundColor: palette.brand,
       foregroundColor: Colors.white,
       elevation: 0,

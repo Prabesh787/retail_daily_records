@@ -1,12 +1,12 @@
 import '../../core/domain/money.dart';
 import '../../core/utils/nepali_date.dart';
 
-/// Tolerant readers for JSON coming off the wire.
+/// Readers for the JSON the API sends.
 ///
-/// The backend is undecided, so its exact types are unknown: dates may arrive
-/// as epoch millis, epoch seconds or an ISO string; booleans as `true`, `1` or
-/// `"1"`; money as a number or a string. Parsing defensively here means a
-/// backend choice never turns into a crash in a DAO.
+/// The backend is precise about its types — money as fixed-precision strings,
+/// document dates as `YYYY-MM-DD`, timestamps as ISO-8601 — and these readers
+/// are still tolerant, because the alternative to a tolerant read is a crash in
+/// a screen when one field arrives in a shape nobody expected.
 class WireCodec {
   WireCodec._();
 
@@ -38,10 +38,11 @@ class WireCodec {
     return s == 'true' || s == '1' || s == 'yes';
   }
 
-  /// Normalises whatever the server calls a timestamp into epoch millis.
+  /// A **timestamp** — an instant, such as `createdAt`. Normalised to epoch
+  /// millis.
   static int millis(Object? value, {int? fallback}) {
-    final now = fallback ?? DateTime.now().millisecondsSinceEpoch;
-    if (value == null) return now;
+    final absent = fallback ?? DateTime.now().millisecondsSinceEpoch;
+    if (value == null) return absent;
     if (value is num) {
       final n = value.toInt();
       // A 10-digit value is seconds, 13 digits is millis.
@@ -49,7 +50,7 @@ class WireCodec {
     }
     final parsed = DateTime.tryParse(value.toString());
     if (parsed != null) return parsed.millisecondsSinceEpoch;
-    return int.tryParse(value.toString()) ?? now;
+    return int.tryParse(value.toString()) ?? absent;
   }
 
   static List<Map<String, dynamic>> objects(Object? value) {
@@ -57,6 +58,16 @@ class WireCodec {
       return value.whereType<Map<String, dynamic>>().toList();
     }
     return const [];
+  }
+
+  /// The `name` off a relation the API included, e.g. `supplier: { id, name }`.
+  ///
+  /// Null when the relation was not included, which is how a list row that came
+  /// back without its supplier shows nothing rather than an empty string that
+  /// reads as a supplier with no name.
+  static String? nestedName(Object? value) {
+    if (value is! Map) return null;
+    return stringOrNull(value['name']);
   }
 
   /// A **document date** — a calendar day, not an instant.
@@ -93,4 +104,10 @@ class WireCodec {
   static Money money(Object? value) => Money.fromWire(value);
 
   static Quantity quantity(Object? value) => Quantity.fromWire(value);
+
+  /// A document date on the way out: epoch millis to the `YYYY-MM-DD` the API
+  /// validates against.
+  static String isoDate(int ms) => NepaliDate.toIsoDate(NepaliDate.fromMs(ms));
+
+  static String? isoDateOrNull(int? ms) => ms == null ? null : isoDate(ms);
 }

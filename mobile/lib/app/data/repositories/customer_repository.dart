@@ -1,19 +1,31 @@
-import '../../core/constants/db_constants.dart';
+import '../../core/constants/entities.dart';
 import '../../core/errors/app_exception.dart';
-import '../enums/sync_status.dart';
 import '../models/customer.dart';
 import 'base_repository.dart';
 
 class CustomerRepository extends BaseRepository {
   @override
-  String get entity => DbTables.customer;
+  String get entity => Entities.customer;
 
-  Future<List<Customer>> list({String? search}) =>
-      dbService.customers.all(search: search);
+  /// Each row carries what that customer has bought, derived by the server from
+  /// their sales.
+  Future<List<Customer>> list({String? search, int? limit}) async {
+    final response = await api.customers(
+      query: {'q': search, 'limit': pageSize(limit)},
+    );
+    return response.rows.map(Customer.fromJson).toList();
+  }
 
-  Future<Customer?> byId(String id) => dbService.customers.byId(id);
-
-  Future<int> count() => dbService.customers.count();
+  Future<Customer?> byId(String id) async {
+    if (id.isEmpty) return null;
+    try {
+      final response = await api.customer(id);
+      return Customer.fromJson(response.object);
+    } on ValidationException catch (e) {
+      if (e.isNotFound) return null;
+      rethrow;
+    }
+  }
 
   Future<Customer> save(Customer customer) async {
     final name = customer.name.trim();
@@ -21,67 +33,17 @@ class CustomerRepository extends BaseRepository {
       throw const ValidationException('A customer needs a name.');
     }
 
-    final timestamp = nowMs;
-    final isNew = customer.id.isEmpty;
+    final draft = customer.copyWith(name: name);
 
-    final stamped = isNew
-        ? Customer(
-            id: newId(),
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            name: name,
-            phone: customer.phone,
-            address: customer.address,
-            pan: customer.pan,
-            remarks: customer.remarks,
-            syncStatus: SyncStatus.pending,
-            deviceId: deviceId,
-          )
-        : customer.copyWith(
-            name: name,
-            updatedAt: timestamp,
-            syncStatus: SyncStatus.pending,
-            deviceId: deviceId,
-          );
-
-    await write((txn) async {
-      await dbService.customers.upsert(txn, stamped);
-      await enqueue(
-        txn,
-        entity: DbTables.customer,
-        entityId: stamped.id,
-        payload: stamped.toJson(),
-        updatedAt: timestamp,
-      );
-    });
-
-    return stamped;
-  }
-
-  /// Soft delete. A customer with invoices refuses — those sales would lose the
-  /// name they were made out to.
-  Future<void> delete(String id) async {
-    final existing = await byId(id);
-    if (existing == null) return;
-
-    if (await dbService.customers.hasSales(id)) {
-      throw ValidationException(
-        '${existing.name} has invoices recorded and cannot be removed.',
-      );
-    }
-
-    final timestamp = nowMs;
-    await write((txn) async {
-      await dbService.customers.softDelete(txn, id, timestamp);
-      await enqueue(
-        txn,
-        entity: DbTables.customer,
-        entityId: id,
-        operation: SyncOperationType.delete,
-        payload:
-            existing.copyWith(isDeleted: true, updatedAt: timestamp).toJson(),
-        updatedAt: timestamp,
-      );
+    return write(() async {
+      final response = draft.id.isEmpty
+          ? await api.createCustomer(draft.toRequestBody())
+          : await api.updateCustomer(draft.id, draft.toRequestBody());
+      return Customer.fromJson(response.object);
     });
   }
+
+  /// A customer with invoices refuses — those sales would lose the name they
+  /// were made out to. The server enforces it and says so.
+  Future<void> delete(String id) => write(() => api.deleteCustomer(id));
 }

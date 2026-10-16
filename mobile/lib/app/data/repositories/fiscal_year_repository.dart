@@ -1,36 +1,55 @@
-import 'package:sqflite/sqflite.dart';
-
-import '../../core/constants/db_constants.dart';
+import '../../core/constants/entities.dart';
 import '../../core/errors/app_exception.dart';
-import '../enums/sync_status.dart';
 import '../models/fiscal_year.dart';
 import 'base_repository.dart';
 
 class FiscalYearRepository extends BaseRepository {
   @override
-  String get entity => DbTables.fiscalYear;
+  String get entity => Entities.fiscalYear;
 
-  Future<List<FiscalYear>> list() => dbService.fiscalYears.all();
+  Future<List<FiscalYear>> list() async {
+    final response = await api.fiscalYears();
+    return response.rows.map(FiscalYear.fromJson).toList();
+  }
 
-  Future<FiscalYear?> byId(String id) => dbService.fiscalYears.byId(id);
-
-  Future<FiscalYear?> active() => dbService.fiscalYears.active();
+  Future<FiscalYear?> active() async {
+    try {
+      final response = await api.activeFiscalYear();
+      return FiscalYear.fromJson(response.object);
+    } on ValidationException catch (e) {
+      // A shop that has not set up its first year yet is a normal state, not an
+      // error worth showing: the forms already say what to do about it.
+      if (e.isNotFound) return null;
+      rethrow;
+    }
+  }
 
   /// The year a document dated [dateMs] belongs to.
   ///
   /// Falls back to the active year when none covers the date, so a form is
   /// never blocked — but the caller should say which it used, because filing a
-  /// bill under a year that does not contain its own date is how a row ends up
-  /// somewhere nobody thinks to look.
-  Future<FiscalYear?> forDate(int dateMs) async =>
-      await dbService.fiscalYears.covering(dateMs) ??
-      await dbService.fiscalYears.active();
+  /// bill under a year that does not contain its own date is how a record ends
+  /// up somewhere nobody thinks to look.
+  ///
+  /// Answered from the full list rather than by an endpoint of its own: there
+  /// are a handful of years in a shop's life, and one round trip that also
+  /// covers "is there an active one" beats two.
+  Future<FiscalYear?> forDate(int dateMs) async {
+    final years = await list();
+    for (final year in years) {
+      if (year.containsMs(dateMs)) return year;
+    }
+    for (final year in years) {
+      if (year.isActive) return year;
+    }
+    return null;
+  }
 
   /// Creates or updates a year. Pass an empty [FiscalYear.id] to create.
   ///
-  /// Marking one active is part of the same write, not a second call: the flag
-  /// is cleared on every other year inside the same transaction, so there is
-  /// never a moment with two active years or none.
+  /// Marking one active is part of the same request rather than a second call:
+  /// the server clears the flag on the others in the same transaction, so there
+  /// is never a moment with two active years or none.
   Future<FiscalYear> save(FiscalYear year) async {
     final name = year.name.trim();
     if (name.isEmpty) {
@@ -40,134 +59,24 @@ class FiscalYearRepository extends BaseRepository {
       throw const ValidationException('The year has to end after it starts.');
     }
 
-    final isNew = year.id.isEmpty;
-    if (await dbService.fiscalYears
-        .nameExists(name, exceptId: isNew ? null : year.id)) {
-      throw ValidationException('$name already exists.');
-    }
+    final body = year.copyWith(name: name).toRequestBody();
 
-    final timestamp = nowMs;
-    final stamped = isNew
-        ? FiscalYear(
-            id: newId(),
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            name: name,
-            startDate: year.startDate,
-            endDate: year.endDate,
-            startDateBs: year.startDateBs,
-            endDateBs: year.endDateBs,
-            isActive: year.isActive,
-            syncStatus: SyncStatus.pending,
-            deviceId: deviceId,
-          )
-        : year.copyWith(
-            name: name,
-            updatedAt: timestamp,
-            syncStatus: SyncStatus.pending,
-            deviceId: deviceId,
-          );
-
-    await write((txn) async {
-      await dbService.fiscalYears.upsert(txn, stamped);
-      await enqueue(
-        txn,
-        entity: DbTables.fiscalYear,
-        entityId: stamped.id,
-        payload: stamped.toJson(),
-        updatedAt: timestamp,
-      );
-      if (stamped.isActive) {
-        await _deactivateOthers(txn, stamped.id, timestamp);
-      }
+    return write(() async {
+      final response = year.id.isEmpty
+          ? await api.createFiscalYear(body)
+          : await api.updateFiscalYear(year.id, body);
+      return FiscalYear.fromJson(response.object);
     });
-
-    return stamped;
   }
 
   /// Makes [id] the year new records are filed under.
-  Future<FiscalYear?> activate(String id) async {
-    final year = await byId(id);
-    if (year == null) return null;
+  Future<FiscalYear> activate(String id) => write(() async {
+        final response = await api.activateFiscalYear(id);
+        return FiscalYear.fromJson(response.object);
+      });
 
-    final timestamp = nowMs;
-    final activated = year.copyWith(
-      isActive: true,
-      updatedAt: timestamp,
-      syncStatus: SyncStatus.pending,
-      deviceId: deviceId,
-    );
-
-    await write((txn) async {
-      await dbService.fiscalYears.upsert(txn, activated);
-      await enqueue(
-        txn,
-        entity: DbTables.fiscalYear,
-        entityId: activated.id,
-        payload: activated.toJson(),
-        updatedAt: timestamp,
-      );
-      await _deactivateOthers(txn, activated.id, timestamp);
-    });
-
-    return activated;
-  }
-
-  /// Clears the flag on the other years **and queues each one for push**.
-  ///
-  /// Queueing matters: a flag flipped only locally leaves two devices
-  /// disagreeing about which year is current, and the disagreement is invisible
-  /// until something is filed under the wrong one.
-  Future<void> _deactivateOthers(
-    DatabaseExecutor txn,
-    String keepId,
-    int timestamp,
-  ) async {
-    final others = await dbService.fiscalYears.othersActive(txn, keepId);
-
-    for (final other in others) {
-      final cleared = other.copyWith(
-        isActive: false,
-        updatedAt: timestamp,
-        syncStatus: SyncStatus.pending,
-        deviceId: deviceId,
-      );
-      await dbService.fiscalYears.upsert(txn, cleared);
-      await enqueue(
-        txn,
-        entity: DbTables.fiscalYear,
-        entityId: cleared.id,
-        payload: cleared.toJson(),
-        updatedAt: timestamp,
-      );
-    }
-  }
-
-  /// Soft delete. A year with anything filed under it refuses — the same rule
-  /// the server applies, and for the same reason: the documents would be
-  /// orphaned.
-  Future<void> delete(String id) async {
-    final existing = await byId(id);
-    if (existing == null) return;
-
-    if (await dbService.fiscalYears.hasTransactions(id)) {
-      throw ValidationException(
-        '${existing.name} has records filed under it and cannot be removed.',
-      );
-    }
-
-    final timestamp = nowMs;
-    await write((txn) async {
-      await dbService.fiscalYears.softDelete(txn, id, timestamp);
-      await enqueue(
-        txn,
-        entity: DbTables.fiscalYear,
-        entityId: id,
-        operation: SyncOperationType.delete,
-        payload:
-            existing.copyWith(isDeleted: true, updatedAt: timestamp).toJson(),
-        updatedAt: timestamp,
-      );
-    });
-  }
+  /// A year with anything filed under it refuses, and the server says so in
+  /// words worth repeating — so the message is passed through rather than
+  /// replaced with a generic one.
+  Future<void> delete(String id) => write(() => api.deleteFiscalYear(id));
 }

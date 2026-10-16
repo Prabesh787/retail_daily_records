@@ -24,9 +24,4 @@ class AppStrings {
   static const String search = 'Search';
   static const String noData = 'Nothing here yet';
 
-  // Sync
-  static const String syncNow = 'Sync now';
-  static const String offline = 'Offline';
-  static const String localOnly = 'Local only';
-  static const String pendingChanges = 'pending changes';
 }

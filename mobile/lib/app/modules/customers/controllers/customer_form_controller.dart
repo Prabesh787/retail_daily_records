@@ -87,8 +87,7 @@ class CustomerFormController extends GetxController {
       final saved = await _customers.save(
         Customer(
           id: _id ?? '',
-          createdAt: _existing?.createdAt ?? 0,
-          updatedAt: _existing?.updatedAt ?? 0,
+
           name: name.text.trim(),
           phone: _trimmed(phone),
           address: _trimmed(address),

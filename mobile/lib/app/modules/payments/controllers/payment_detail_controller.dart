@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/widgets/app_toast.dart';
@@ -20,7 +20,7 @@ class PaymentDetailController extends LoaderController<SupplierPayment> {
   final RxBool isActing = false.obs;
 
   @override
-  List<String> get watches => const [DbTables.supplierPayment];
+  List<String> get watches => const [Entities.supplierPayment];
 
   SupplierPayment? get payment => data.value;
 

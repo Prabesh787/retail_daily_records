@@ -10,10 +10,10 @@ import '../app_sheet.dart';
 
 /// The window a list or report covers.
 ///
-/// Both bounds are optional and inclusive, held as epoch millis to match the
-/// date columns: [from] at the start of its day, [to] at the end of its day, so
-/// a range of "today to today" contains today's records rather than only those
-/// stamped exactly midnight.
+/// Both bounds are optional and **inclusive whole days**, held the way every
+/// date on a record is — see [AppDateUtils]. A range of "today to today" is
+/// today's records, because the server compares calendar days rather than
+/// instants; there is no end-of-day to reach for and nothing to be off by.
 @immutable
 class DateRange {
   const DateRange({this.from, this.to});
@@ -21,11 +21,10 @@ class DateRange {
   /// Everything, the default on a screen the shopkeeper has not filtered.
   const DateRange.all() : from = null, to = null;
 
-  /// Whole days, normalised to the bounds of each — the form every caller
-  /// actually wants, and the one that is easy to get subtly wrong.
+  /// Whole days, normalised — the form every caller actually wants.
   factory DateRange.days(DateTime from, DateTime to) => DateRange(
-    from: AppDateUtils.startOfDay(from).millisecondsSinceEpoch,
-    to: AppDateUtils.endOfDay(to).millisecondsSinceEpoch,
+    from: AppDateUtils.dayMs(from),
+    to: AppDateUtils.dayMs(to),
   );
 
   final int? from;
@@ -71,7 +70,7 @@ List<DateRangePreset> buildDateRangePresets({FiscalYear? fiscalYear}) {
       label: 'This month',
       range: DateRange(
         from: AppDateUtils.startOfMonthMs(now),
-        to: AppDateUtils.endOfTodayMs(),
+        to: AppDateUtils.todayMs(),
       ),
     ),
     DateRangePreset(
@@ -137,8 +136,8 @@ class _DateRangeBody extends StatelessWidget {
       initialDateRange: selected.from == null || selected.to == null
           ? null
           : DateTimeRange(
-              start: AppDateUtils.fromMs(selected.from!),
-              end: AppDateUtils.fromMs(selected.to!),
+              start: AppDateUtils.dayOf(selected.from!),
+              end: AppDateUtils.dayOf(selected.to!),
             ),
     );
 

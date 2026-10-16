@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import '../../../core/constants/db_constants.dart';
+import '../../../core/constants/entities.dart';
 import '../../../core/controllers/loader_controller.dart';
 import '../../../core/domain/money.dart';
 import '../../../core/utils/date_utils.dart';
@@ -23,7 +23,7 @@ class ChequeRegisterController extends LoaderController<List<SupplierPayment>> {
   final RxBool onlyPending = true.obs;
 
   @override
-  List<String> get watches => const [DbTables.supplierPayment];
+  List<String> get watches => const [Entities.supplierPayment];
 
   List<SupplierPayment> get rows => data.value ?? const [];
 

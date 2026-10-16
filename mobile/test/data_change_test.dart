@@ -1,4 +1,4 @@
-import 'package:billrecord/app/core/constants/db_constants.dart';
+import 'package:billrecord/app/core/constants/entities.dart';
 import 'package:billrecord/app/services/data_change_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -20,9 +20,9 @@ void main() {
 
   test('a watcher hears about the entity it asked for', () async {
     var calls = 0;
-    final sub = bus.watch([DbTables.supplier], () => calls++);
+    final sub = bus.watch([Entities.supplier], () => calls++);
 
-    bus.publish([DbTables.supplier]);
+    bus.publish([Entities.supplier]);
     await settle();
 
     expect(calls, 1);
@@ -31,9 +31,9 @@ void main() {
 
   test('a watcher does not hear about entities it did not ask for', () async {
     var calls = 0;
-    final sub = bus.watch([DbTables.sale], () => calls++);
+    final sub = bus.watch([Entities.sale], () => calls++);
 
-    bus.publish([DbTables.supplier]);
+    bus.publish([Entities.supplier]);
     await settle();
 
     expect(calls, 0);
@@ -45,11 +45,11 @@ void main() {
     // every balance on that screen is derived from purchases.
     var calls = 0;
     final sub = bus.watch(
-      [DbTables.supplier, DbTables.purchase, DbTables.supplierPayment],
+      [Entities.supplier, Entities.purchase, Entities.supplierPayment],
       () => calls++,
     );
 
-    bus.publish([DbTables.purchase]);
+    bus.publish([Entities.purchase]);
     await settle();
 
     expect(calls, 1);
@@ -58,13 +58,13 @@ void main() {
 
   test('a burst of writes arrives as one event', () async {
     var calls = 0;
-    final sub = bus.watch([DbTables.purchase], () => calls++);
+    final sub = bus.watch([Entities.purchase], () => calls++);
 
     // A sync pull landing a page of rows, or a save that touches several
     // tables. Reloading a list once per row would be the same query run two
     // hundred times for one answer.
     for (var i = 0; i < 200; i++) {
-      bus.publish([DbTables.purchase]);
+      bus.publish([Entities.purchase]);
     }
     await settle();
 
@@ -74,11 +74,11 @@ void main() {
 
   test('separate bursts are separate events', () async {
     var calls = 0;
-    final sub = bus.watch([DbTables.sale], () => calls++);
+    final sub = bus.watch([Entities.sale], () => calls++);
 
-    bus.publish([DbTables.sale]);
+    bus.publish([Entities.sale]);
     await settle();
-    bus.publish([DbTables.sale]);
+    bus.publish([Entities.sale]);
     await settle();
 
     expect(calls, 2);
@@ -88,10 +88,10 @@ void main() {
   test('one publish can wake watchers of different entities', () async {
     var supplierCalls = 0;
     var saleCalls = 0;
-    final a = bus.watch([DbTables.supplier], () => supplierCalls++);
-    final b = bus.watch([DbTables.sale], () => saleCalls++);
+    final a = bus.watch([Entities.supplier], () => supplierCalls++);
+    final b = bus.watch([Entities.sale], () => saleCalls++);
 
-    bus.publish([DbTables.supplier, DbTables.sale]);
+    bus.publish([Entities.supplier, Entities.sale]);
     await settle();
 
     expect(supplierCalls, 1);
@@ -102,10 +102,10 @@ void main() {
 
   test('a cancelled watcher stops hearing anything', () async {
     var calls = 0;
-    final sub = bus.watch([DbTables.supplier], () => calls++);
+    final sub = bus.watch([Entities.supplier], () => calls++);
     await sub.cancel();
 
-    bus.publish([DbTables.supplier]);
+    bus.publish([Entities.supplier]);
     await settle();
 
     // A controller that forgot this would keep reloading a disposed screen for
@@ -118,7 +118,7 @@ void main() {
 
     // A repository can outlive the service graph during a sign-out teardown,
     // and a write completing at that moment must not throw on the way out.
-    expect(() => bus.publish([DbTables.supplier]), returnsNormally);
+    expect(() => bus.publish([Entities.supplier]), returnsNormally);
 
     // The tearDown closes it again; that must be safe too.
   });

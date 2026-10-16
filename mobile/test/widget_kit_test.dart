@@ -35,9 +35,9 @@ void main() {
     }
   }
 
-  int daysFromNow(int days) => AppDateUtils.startOfDay(
+  int daysFromNow(int days) => AppDateUtils.dayMs(
     DateTime.now().add(Duration(days: days)),
-  ).millisecondsSinceEpoch;
+  );
 
   Supplier supplier({required String name, Money? outstanding, int bills = 0}) {
     final owed = outstanding ?? Money.zero;
@@ -51,6 +51,10 @@ void main() {
         purchaseTotal: owed,
         clearedTotal: Money.zero,
         uncleared: Money.zero,
+        // Read from the server rather than recomputed from the parts above —
+        // one implementation of the sum, so the card and the ledger cannot
+        // disagree about a supplier.
+        outstanding: owed,
         billCount: bills,
         paymentCount: 0,
       ),
@@ -245,27 +249,25 @@ void main() {
       expect(describeRange(custom, presets), '04 May – 11 Jun 2026');
     });
 
-    test('the bounds cover whole days, not the instant they were built', () {
-      final range = DateRange.days(DateTime(2026, 5, 4), DateTime(2026, 5, 4));
-      final start = DateTime.fromMillisecondsSinceEpoch(range.from!);
-      final end = DateTime.fromMillisecondsSinceEpoch(range.to!);
+    test('the bounds are calendar days, not the instant they were built', () {
+      // Built from an evening, which under a local-midnight convention would
+      // land the window on the wrong day once it reached the server.
+      final evening = DateTime(2026, 5, 4, 21, 30);
+      final range = DateRange.days(evening, evening);
 
-      expect(start.hour, 0);
-      expect(end.hour, 23);
-      expect(end.minute, 59);
+      expect(range.from, DateTime.utc(2026, 5, 4).millisecondsSinceEpoch);
+      // A single day is one day, with no end-of-day to be off by: the server
+      // compares calendar days, so "4 May to 4 May" is 4 May's records.
+      expect(range.to, range.from);
     });
   });
 
   group('date labels', () {
     test('days are counted between calendar days, not by elapsed hours', () {
       // Built from an evening, where an hours-based count would say zero.
-      final tomorrow = DateTime.now().add(const Duration(days: 1));
-      final ms = DateTime(
-        tomorrow.year,
-        tomorrow.month,
-        tomorrow.day,
-        1,
-      ).millisecondsSinceEpoch;
+      final ms = AppDateUtils.dayMs(
+        DateTime.now().add(const Duration(days: 1, hours: 1)),
+      );
 
       expect(AppDateUtils.daysUntil(ms), 1);
       expect(AppDateUtils.relativeDay(ms), 'Tomorrow');

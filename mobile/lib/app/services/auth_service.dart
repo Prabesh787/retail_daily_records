@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:get/get.dart';
 
-import '../core/constants/db_constants.dart';
+import '../core/constants/entities.dart';
 import '../core/errors/app_exception.dart';
 import '../data/models/app_user.dart';
 import '../data/providers/remote/auth_api.dart';
@@ -11,14 +11,13 @@ import 'storage_service.dart';
 /// Who is signed in.
 ///
 /// **Signing in is required.** The app serves several shops off one hosted
-/// backend, and every record belongs to exactly one of them, so there is no
-/// meaningful "just start recording" state: without an account the app does not
-/// know whose books it is opening.
+/// backend, every record belongs to exactly one of them, and the records live
+/// on the server — so without an account there is nothing to show and no way to
+/// know whose books to show it from.
 ///
 /// That means a session ending — token expired, revoked, account switched off —
-/// puts the user back at the login screen, and until the offline work is done
-/// it also means the app needs a connection to open. [signOut] and
-/// [onUnauthorized] are therefore the same act, and both end at the front door.
+/// puts the user back at the login screen. [signOut] and [onUnauthorized] are
+/// therefore the same act, and both end at the front door.
 class AuthService extends GetxService {
   AuthService(this._api);
 
@@ -31,7 +30,7 @@ class AuthService extends GetxService {
 
   Future<AuthService> init() async {
     // Both halves or neither. A cached account with no token cannot make a
-    // request, and a token with no cached account has nobody to show - either
+    // request, and a token with no cached account has nobody to show — either
     // way the only honest answer is "signed out".
     final cached = _cachedUser();
     if (cached != null && (token ?? '').isNotEmpty) {
@@ -53,7 +52,7 @@ class AuthService extends GetxService {
   /// form that cannot work.
   bool get canSignIn => _api.isConfigured;
 
-  String? get token => _storage.authToken;
+  String? get token => _storage.readString(StorageKeys.authToken);
 
   Shop get shop => user.value?.shop ?? const Shop();
 
@@ -68,31 +67,26 @@ class AuthService extends GetxService {
     required String email,
     required String password,
   }) async {
-    if (!_api.isConfigured) {
-      throw const NetworkException(
-        'This build has no server address set, so there is nothing to sign in '
-        'to. Rebuild with API_BASE_URL pointing at the shop server.',
-      );
-    }
-
     final result = await _api.login(email: email, password: password);
-    _storage.authToken = result.token;
+    _storage.writeString(StorageKeys.authToken, result.token);
     _cacheUser(result.user);
     return result.user;
   }
 
-  /// Re-reads the account. Used after opening the app to pick up a shop detail
-  /// or a role changed elsewhere.
+  /// Re-reads the account, to pick up a shop detail or a role changed
+  /// elsewhere, and to discover a token revoked since last launch.
   ///
-  /// A transport failure is swallowed: the cached copy is what every screen
-  /// reads and is still the best answer available. A rejected token is not
-  /// swallowed - [ApiClient] has already cleared the session by then.
+  /// A transport failure is swallowed: the cached copy is only a name in a
+  /// header, and losing the connection for a moment is not a reason to throw
+  /// the user out. A rejected token is not swallowed — [ApiClient] has already
+  /// ended the session by then.
   Future<void> refresh() async {
     if (!isSignedIn) return;
     try {
       _cacheUser(await _api.me());
     } on AppException {
-      // Offline or a blip. The cache stands.
+      // A blip. The cached name stands until the next screen asks the server
+      // for something that actually matters.
     }
   }
 
@@ -111,19 +105,13 @@ class AuthService extends GetxService {
   /// off. Ends the session and returns to the front door.
   ///
   /// Called from the HTTP client, so it can fire from any screen at any moment.
-  /// It is safe to call more than once - a second call finds nothing to clear
-  /// and no route to change.
+  /// Safe to call more than once — a second call finds nothing to clear and no
+  /// route to change.
   Future<void> onUnauthorized() async {
     if (!isSignedIn) return;
     await signOut(message: 'Your session has ended. Please sign in again.');
   }
 
-  /// Ends the session and shows the login screen.
-  ///
-  /// Local rows are deliberately **not** deleted: they may include work this
-  /// device has not managed to send yet, and throwing that away because a token
-  /// lapsed would be losing the shop's records to fix a login problem. Clearing
-  /// them is a separate, louder action.
   Future<void> signOut({String? message}) async {
     await _clearSession();
     Get.offAllNamed(_loginRoute);
@@ -137,22 +125,19 @@ class AuthService extends GetxService {
   static const String _loginRoute = '/login';
 
   Future<void> _clearSession() async {
-    _storage.authToken = null;
-    _storage.cachedUser = null;
-    // The next account to sign in on this phone must pull its own history from
-    // the beginning rather than inherit a cursor claiming someone else's
-    // records are already up to date.
-    await _storage.clearCursors();
+    _storage
+      ..writeString(StorageKeys.authToken, null)
+      ..writeString(StorageKeys.cachedUser, null);
     user.value = null;
   }
 
   void _cacheUser(AppUser value) {
     user.value = value;
-    _storage.cachedUser = jsonEncode(value.toJson());
+    _storage.writeString(StorageKeys.cachedUser, jsonEncode(value.toJson()));
   }
 
   AppUser? _cachedUser() {
-    final raw = _storage.cachedUser;
+    final raw = _storage.readString(StorageKeys.cachedUser);
     if (raw == null || raw.isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
@@ -162,14 +147,4 @@ class AuthService extends GetxService {
     }
     return null;
   }
-}
-
-/// Storage keys owned by this service, kept in [StorageKeys] with the others so
-/// nothing collides and one `erase()` clears everything.
-extension AuthStorage on StorageService {
-  String? get authToken => readString(StorageKeys.authToken);
-  set authToken(String? value) => writeString(StorageKeys.authToken, value);
-
-  String? get cachedUser => readString(StorageKeys.cachedUser);
-  set cachedUser(String? value) => writeString(StorageKeys.cachedUser, value);
 }
