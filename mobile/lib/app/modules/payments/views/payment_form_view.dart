@@ -112,6 +112,16 @@ class PaymentFormView extends GetView<PaymentFormController> {
                 ),
               ),
             ),
+            AppSizes.gapMd,
+
+            const SectionHeader(title: 'RECEIPT OR CHEQUE PHOTO'),
+            ScanDraftStrip(
+              draft: controller.scans,
+              emptyTitle: 'Attach the receipt or cheque',
+              emptyMessage:
+                  'Photograph it so the payment is on record even if the paper '
+                  'is lost.',
+            ),
             AppSizes.gapSm,
 
             MoreDetails(

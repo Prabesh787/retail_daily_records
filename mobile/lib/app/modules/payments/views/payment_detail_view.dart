@@ -112,6 +112,21 @@ class PaymentDetailView extends GetView<PaymentDetailController> {
         ),
         AppSizes.gapLg,
 
+        SectionHeader(
+          title: 'RECEIPT OR CHEQUE PHOTO (${controller.scans.length})',
+        ),
+        ScanStrip(
+          scans: controller.scans,
+          isAdding: controller.isAttaching.value,
+          onAdd: controller.attachScan,
+          onOpen: controller.openScan,
+          emptyTitle: 'Attach the receipt or cheque',
+          emptyMessage:
+              'Photograph it so the payment is on record even if the paper is '
+              'lost.',
+        ),
+        AppSizes.gapLg,
+
         _Actions(controller: controller),
         AppSizes.gapXl,
       ],

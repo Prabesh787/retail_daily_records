@@ -118,6 +118,16 @@ class PurchaseFormView extends GetView<PurchaseFormController> {
                 ],
               ),
             ),
+            AppSizes.gapMd,
+
+            const SectionHeader(title: 'BILL SCAN'),
+            ScanDraftStrip(
+              draft: controller.scans,
+              emptyTitle: 'Attach the paper bill',
+              emptyMessage:
+                  'Photograph it so the bill is on record even if the paper is '
+                  'lost.',
+            ),
             AppSizes.gapSm,
 
             MoreDetails(

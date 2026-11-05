@@ -8,7 +8,7 @@
 | History | Sales, purchases and both payments in one list, with filters, search and dates |
 | Parties | Customers and Suppliers behind one switch |
 | Accounts | Total balance, each account, cheques not cleared, Move money |
-| More | Day book, Sales by day, Purchase bills, Cheques, shop, fiscal years, theme |
+| More | Day book, Sales by day, Purchase bills, Cheques, Bill gallery, shop, fiscal years, theme |
 
 **The colour rule:** green is money coming in (Sale, Payment In), red is money
 going out (Purchase, Payment Out). The sale, purchase and payment forms are built

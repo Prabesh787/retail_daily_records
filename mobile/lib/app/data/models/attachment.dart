@@ -114,3 +114,40 @@ class Attachment {
       ON ${DbTables.attachment} (entity_type, entity_id)
   ''';
 }
+
+/// A scan with what the gallery says about it, read from the record it is filed
+/// against: the supplier it belongs to and the date on the paper.
+class GalleryScan {
+  const GalleryScan({
+    required this.attachment,
+    required this.supplierId,
+    required this.supplierName,
+    required this.recordDate,
+    this.reference,
+  });
+
+  final Attachment attachment;
+  final String supplierId;
+  final String supplierName;
+
+  /// The bill's or the payment's date, not the day the photo was taken.
+  final int recordDate;
+
+  /// The bill number, or the payment's voucher or cheque number.
+  final String? reference;
+
+  String get title {
+    final kind = attachment.entityType == AttachmentEntityType.purchase
+        ? 'Bill'
+        : attachment.documentType.label;
+    return reference == null ? kind : '$kind $reference';
+  }
+
+  factory GalleryScan.fromMap(Map<String, dynamic> map) => GalleryScan(
+    attachment: Attachment.fromMap(map),
+    supplierId: (map['supplier_id'] as String?) ?? '',
+    supplierName: (map['supplier_name'] as String?) ?? 'Unknown supplier',
+    recordDate: SyncableModel.toInt(map['record_date']),
+    reference: map['reference'] as String?,
+  );
+}

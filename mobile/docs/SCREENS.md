@@ -247,9 +247,6 @@ supplier picker over a hundred rows needs search, so it gets a sheet with a
 
 ## Deliberately not in this plan
 
-- **Attachments.** The schema has `DocumentType` and the web shows scanned bills
-  read-only, but there is no attachment model, DAO or upload path on the phone.
-  It is a feature, not a gap in this port — decide separately.
 - **Editing bills and payments.** They are append-only by design: a mistake is
   voided and re-issued. Only master data — parties, fiscal years, shop — is
   editable.

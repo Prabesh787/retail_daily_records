@@ -40,6 +40,8 @@ abstract class Routes {
   static const String accountDetail = '/accounts/detail';
   static const String accountEntry = '/accounts/entry';
 
+  static const String gallery = '/gallery';
+
   static const String settings = '/settings';
   static const String fiscalYears = '/fiscal-years';
   static const String fiscalYearForm = '/fiscal-years/form';

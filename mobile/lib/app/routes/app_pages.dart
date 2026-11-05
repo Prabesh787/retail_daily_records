@@ -9,6 +9,8 @@ import '../modules/auth/views/login_view.dart';
 import '../modules/customers/bindings/customers_binding.dart';
 import '../modules/customers/views/customer_form_view.dart';
 import '../modules/customers/views/customers_view.dart';
+import '../modules/gallery/bindings/gallery_binding.dart';
+import '../modules/gallery/views/gallery_view.dart';
 import '../modules/home/bindings/home_binding.dart';
 import '../modules/home/views/home_view.dart';
 import '../modules/payments/bindings/payments_binding.dart';
@@ -104,6 +106,12 @@ class AppPages {
       name: Routes.purchaseForm,
       page: () => const PurchaseFormView(),
       binding: PurchaseFormBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.gallery,
+      page: () => const GalleryView(),
+      binding: GalleryBinding(),
       middlewares: _protected,
     ),
     GetPage(

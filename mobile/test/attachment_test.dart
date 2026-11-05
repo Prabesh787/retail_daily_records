@@ -1,18 +1,24 @@
 import 'dart:io';
 
 import 'package:billrecord/app/core/constants/db_constants.dart';
+import 'package:billrecord/app/core/controllers/scan_capture.dart';
 import 'package:billrecord/app/core/domain/money.dart';
 import 'package:billrecord/app/core/errors/app_exception.dart';
 import 'package:billrecord/app/data/enums/document_type.dart';
+import 'package:billrecord/app/data/enums/supplier_payment_mode.dart';
 import 'package:billrecord/app/data/enums/sync_status.dart';
 import 'package:billrecord/app/data/models/attachment.dart';
 import 'package:billrecord/app/data/models/purchase.dart';
+import 'package:billrecord/app/data/models/supplier.dart';
+import 'package:billrecord/app/data/models/supplier_payment.dart';
 import 'package:billrecord/app/data/providers/local/attachment_dao.dart';
 import 'package:billrecord/app/data/providers/remote/attachment_api.dart';
 import 'package:billrecord/app/data/repositories/attachment_repository.dart';
 import 'package:billrecord/app/data/sync/attachment_uploader.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart';
 
 import 'helpers/test_app.dart';
 
@@ -121,6 +127,221 @@ void main() {
         expect(tombstones.single.remoteId, 'remote-1');
       },
     );
+  });
+
+  group('the gallery', () {
+    Future<void> insertSupplier(String id, String name) => app.db.insert(
+      DbTables.supplier,
+      Supplier(id: id, createdAt: now, updatedAt: now, name: name).toMap(),
+    );
+
+    Future<void> insertBill(
+      String id,
+      String supplierId, {
+      int billDate = now,
+    }) => app.db.insert(
+      DbTables.purchase,
+      Purchase(
+        id: id,
+        createdAt: now,
+        updatedAt: now,
+        fiscalYearId: 'fy',
+        supplierId: supplierId,
+        billNo: id,
+        billDate: billDate,
+        amount: Money.fromWire('1000.00'),
+      ).toMap(),
+    );
+
+    Future<void> insertPayment(String id, String supplierId) => app.db.insert(
+      DbTables.supplierPayment,
+      SupplierPayment(
+        id: id,
+        createdAt: now,
+        updatedAt: now,
+        fiscalYearId: 'fy',
+        supplierId: supplierId,
+        paymentDate: now,
+        paymentMode: SupplierPaymentMode.cheque,
+        amount: Money.fromWire('500.00'),
+        chequeNo: 'CHQ-9',
+      ).toMap(),
+    );
+
+    Future<void> scanPayment(String id, DocumentType type) async => repo.add(
+      entityType: AttachmentEntityType.supplierPayment,
+      entityId: id,
+      documentType: type,
+      sourcePath: await sourcePhoto('$id.jpg'),
+    );
+
+    setUp(() async {
+      await insertSupplier('zeta', 'Zeta Traders');
+      await insertSupplier('alpha', 'alpha Fabrics');
+    });
+
+    test('bills and receipts are kept apart', () async {
+      await insertBill('bill-1', 'alpha');
+      await attach('bill-1');
+      await insertPayment('pay-1', 'alpha');
+      await scanPayment('pay-1', DocumentType.chequeCopy);
+
+      final bills = await repo.gallery(
+        entityType: AttachmentEntityType.purchase,
+      );
+      expect(bills.map((s) => s.title), ['Bill bill-1']);
+
+      final receipts = await repo.gallery(
+        entityType: AttachmentEntityType.supplierPayment,
+      );
+      expect(receipts.map((s) => s.title), ['Cheque copy CHQ-9']);
+    });
+
+    test('suppliers come in name order, newest record first in each', () async {
+      await insertBill('z-1', 'zeta');
+      await insertBill('a-old', 'alpha', billDate: now - 1000);
+      await insertBill('a-new', 'alpha');
+      for (final id in ['z-1', 'a-old', 'a-new']) {
+        await attach(id, name: '$id.jpg');
+      }
+
+      final scans = await repo.gallery(
+        entityType: AttachmentEntityType.purchase,
+      );
+
+      expect(scans.map((s) => s.reference), ['a-new', 'a-old', 'z-1']);
+      expect(scans.last.supplierName, 'Zeta Traders');
+    });
+
+    test('filters by supplier and by the date on the bill', () async {
+      await insertBill('z-1', 'zeta');
+      await insertBill('a-old', 'alpha', billDate: now - 1000);
+      await insertBill('a-new', 'alpha');
+      for (final id in ['z-1', 'a-old', 'a-new']) {
+        await attach(id, name: '$id.jpg');
+      }
+
+      final bySupplier = await repo.gallery(
+        entityType: AttachmentEntityType.purchase,
+        supplierId: 'zeta',
+      );
+      expect(bySupplier.map((s) => s.reference), ['z-1']);
+
+      final byDate = await repo.gallery(
+        entityType: AttachmentEntityType.purchase,
+        supplierId: 'alpha',
+        fromMs: now - 1000,
+        toMs: now - 1,
+      );
+      expect(byDate.map((s) => s.reference), ['a-old']);
+    });
+
+    test('leaves out removed scans and scans of deleted records', () async {
+      await insertBill('removed', 'alpha');
+      await insertBill('deleted', 'alpha');
+      await insertBill('kept', 'alpha');
+      final removed = await attach('removed', name: 'removed.jpg');
+      await attach('deleted', name: 'deleted.jpg');
+      await attach('kept', name: 'kept.jpg');
+
+      await dao.markDeleted(removed.id);
+      await app.db.update(
+        DbTables.purchase,
+        {SyncColumns.isDeleted: 1},
+        where: 'id = ?',
+        whereArgs: ['deleted'],
+      );
+
+      final scans = await repo.gallery(
+        entityType: AttachmentEntityType.purchase,
+      );
+      expect(scans.map((s) => s.reference), ['kept']);
+    });
+  });
+
+  group('taken on a form, before the record exists', () {
+    test('files every photo against the record once it is saved', () async {
+      final draft = ScanDraft(paper: 'receipt')
+        ..photos.addAll([
+          XFile(await sourcePhoto('receipt-1.jpg')),
+          XFile(await sourcePhoto('receipt-2.jpg')),
+        ]);
+
+      final failed = await draft.attachTo(
+        entityType: AttachmentEntityType.supplierPayment,
+        entityId: 'pay-1',
+        documentType: DocumentType.supplierPaymentReceipt,
+      );
+
+      expect(failed, 0);
+      final filed = await repo.forEntity(
+        AttachmentEntityType.supplierPayment,
+        'pay-1',
+      );
+      expect(filed.map((a) => a.originalFileName), [
+        'receipt-1.jpg',
+        'receipt-2.jpg',
+      ]);
+      expect(
+        filed.map((a) => a.documentType),
+        everyElement(DocumentType.supplierPaymentReceipt),
+      );
+    });
+
+    test(
+      'one unreadable photo is counted and does not stop the rest',
+      () async {
+        final draft = ScanDraft(paper: 'bill')
+          ..photos.addAll([
+            XFile(p.join(sources.path, 'gone.jpg')),
+            XFile(await sourcePhoto('bill.jpg')),
+          ]);
+
+        final failed = await draft.attachTo(
+          entityType: AttachmentEntityType.purchase,
+          entityId: 'bill-1',
+          documentType: DocumentType.purchaseBill,
+        );
+
+        expect(failed, 1);
+        final filed = await repo.forEntity(
+          AttachmentEntityType.purchase,
+          'bill-1',
+        );
+        expect(filed.map((a) => a.originalFileName), ['bill.jpg']);
+      },
+    );
+
+    test('a payment scan waits for the payment to sync', () async {
+      final scan = await repo.add(
+        entityType: AttachmentEntityType.supplierPayment,
+        entityId: 'pay-1',
+        documentType: DocumentType.supplierPaymentReceipt,
+        sourcePath: await sourcePhoto('receipt.jpg'),
+      );
+
+      Future<void> insertPayment(SyncStatus status) => app.db.insert(
+        DbTables.supplierPayment,
+        SupplierPayment(
+          id: 'pay-1',
+          createdAt: now,
+          updatedAt: now,
+          fiscalYearId: 'fy',
+          supplierId: 'sup',
+          paymentDate: now,
+          paymentMode: SupplierPaymentMode.cash,
+          amount: Money.fromWire('500.00'),
+          syncStatus: status,
+        ).toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      await insertPayment(SyncStatus.pending);
+      expect(await dao.awaitingUpload(), isEmpty);
+
+      await insertPayment(SyncStatus.synced);
+      expect((await dao.awaitingUpload()).map((a) => a.id), [scan.id]);
+    });
   });
 
   group('the uploader', () {

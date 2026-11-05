@@ -113,6 +113,17 @@ class MoreView extends GetView<MoreController> {
                   chevron: true,
                   onTap: () => Get.toNamed<void>(Routes.cheques),
                 ),
+                const RowDivider(),
+                AppListRow(
+                  leading: IconPlate(
+                    icon: Icons.photo_library_rounded,
+                    color: palette.brand,
+                  ),
+                  title: 'Bill gallery',
+                  subtitle: 'Photos of bills and receipts, by supplier',
+                  chevron: true,
+                  onTap: () => Get.toNamed<void>(Routes.gallery),
+                ),
               ],
             ),
           ),

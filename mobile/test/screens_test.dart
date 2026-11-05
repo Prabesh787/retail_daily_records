@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:billrecord/app/core/domain/money.dart';
 import 'package:billrecord/app/core/theme/app_theme.dart';
 import 'package:billrecord/app/core/utils/date_utils.dart';
+import 'package:billrecord/app/data/enums/document_type.dart';
 import 'package:billrecord/app/data/enums/sale_payment_mode.dart';
 import 'package:billrecord/app/data/enums/sale_type.dart';
 import 'package:billrecord/app/data/enums/supplier_payment_mode.dart';
@@ -10,6 +13,7 @@ import 'package:billrecord/app/data/models/sale.dart';
 import 'package:billrecord/app/data/models/sale_payment.dart';
 import 'package:billrecord/app/data/models/supplier.dart';
 import 'package:billrecord/app/data/models/supplier_payment.dart';
+import 'package:billrecord/app/data/repositories/attachment_repository.dart';
 import 'package:billrecord/app/data/repositories/fiscal_year_repository.dart';
 import 'package:billrecord/app/data/repositories/purchase_repository.dart';
 import 'package:billrecord/app/data/repositories/sale_repository.dart';
@@ -21,6 +25,10 @@ import 'package:billrecord/app/modules/activity/controllers/activity_controller.
 import 'package:billrecord/app/modules/activity/views/activity_view.dart';
 import 'package:billrecord/app/modules/customers/bindings/customers_binding.dart';
 import 'package:billrecord/app/modules/customers/controllers/customers_controller.dart';
+import 'package:billrecord/app/core/widgets/domain/date_range_sheet.dart';
+import 'package:billrecord/app/modules/gallery/bindings/gallery_binding.dart';
+import 'package:billrecord/app/modules/gallery/controllers/gallery_controller.dart';
+import 'package:billrecord/app/modules/gallery/views/gallery_view.dart';
 import 'package:billrecord/app/modules/home/controllers/home_controller.dart';
 import 'package:billrecord/app/modules/parties/controllers/parties_controller.dart';
 import 'package:billrecord/app/modules/parties/views/parties_view.dart';
@@ -32,11 +40,13 @@ import 'package:billrecord/app/modules/customers/views/customers_view.dart';
 import 'package:billrecord/app/modules/more/controllers/more_controller.dart';
 import 'package:billrecord/app/modules/more/views/more_view.dart';
 import 'package:billrecord/app/modules/payments/bindings/payments_binding.dart';
+import 'package:billrecord/app/modules/payments/controllers/payment_form_controller.dart';
 import 'package:billrecord/app/modules/payments/views/cheque_register_view.dart';
 import 'package:billrecord/app/modules/payments/views/payment_detail_view.dart';
 import 'package:billrecord/app/modules/payments/views/payment_form_view.dart';
 import 'package:billrecord/app/modules/payments/views/receipt_form_view.dart';
 import 'package:billrecord/app/modules/purchases/bindings/purchases_binding.dart';
+import 'package:billrecord/app/modules/purchases/controllers/purchase_form_controller.dart';
 import 'package:billrecord/app/modules/purchases/controllers/purchases_controller.dart';
 import 'package:billrecord/app/modules/purchases/views/purchase_detail_view.dart';
 import 'package:billrecord/app/modules/purchases/views/purchase_form_view.dart';
@@ -59,6 +69,8 @@ import 'package:billrecord/app/modules/suppliers/views/suppliers_view.dart';
 import 'package:billrecord/app/routes/app_pages.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
 
 import 'helpers/test_app.dart';
 
@@ -87,6 +99,14 @@ void main() {
   final int today = AppDateUtils.startOfTodayMs();
 
   // ---- Seed data ----------------------------------------------------------
+
+  Future<String> tempPhoto(String name) async {
+    final dir = await Directory.systemTemp.createTemp('form_scan');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File(p.join(dir.path, name));
+    await file.writeAsBytes(List.filled(2048, 7));
+    return file.path;
+  }
 
   Future<FiscalYear> seedYear() => Get.find<FiscalYearRepository>().save(
     FiscalYear(
@@ -270,6 +290,51 @@ void main() {
       );
 
       expect(find.text('Save bill'), findsOneWidget);
+      expect(find.text('Attach the paper bill'), findsOneWidget);
+    });
+
+    testWidgets('a photo taken on the form lands on the saved bill', (
+      tester,
+    ) async {
+      await seed(tester, seedYear);
+      final supplier = await seed(tester, seedSupplier);
+      final photo = await seed(tester, () => tempPhoto('bill.jpg'));
+
+      await pumpScreen(
+        tester,
+        const PurchaseFormView(),
+        binding: PurchaseFormBinding(),
+        arguments: {RouteArgs.presetSupplierId: supplier.id},
+      );
+      final form = Get.find<PurchaseFormController>();
+      await settle(tester);
+
+      form.scans.photos.add(XFile(photo));
+      form.billNo.text = '4521';
+      form.amount.text = '1200';
+      await settle(tester);
+      expect(find.byTooltip('Remove this photo'), findsOneWidget);
+
+      await tester.tap(find.text('Save bill'));
+      // Several real writes: the record, its queue row, then the photo copy.
+      await settle(tester, rounds: 15);
+
+      final bills = await seed(
+        tester,
+        () => Get.find<PurchaseRepository>().list(),
+      );
+      final filed = await seed(
+        tester,
+        () => Get.find<AttachmentRepository>().forEntity(
+          AttachmentEntityType.purchase,
+          bills.single.id,
+        ),
+      );
+      expect(filed.single.documentType, DocumentType.purchaseBill);
+
+      // Lets the confirmation toast finish, or its ticker outlives the test.
+      await tester.pump(const Duration(seconds: 5));
+      await settle(tester);
     });
 
     testWidgets('detail renders', (tester) async {
@@ -300,6 +365,8 @@ void main() {
         binding: PaymentFormBinding(),
       );
 
+      expect(find.text('Attach the receipt or cheque'), findsOneWidget);
+
       // Cash is the default, so the cheque fields must not be on screen yet.
       expect(find.text('Cheque number'), findsNothing);
 
@@ -323,8 +390,52 @@ void main() {
       );
 
       expect(find.text('AMOUNT PAID'), findsOneWidget);
+      expect(find.text('Attach the receipt or cheque'), findsOneWidget);
       // An issued cheque can still be cleared, so the action must be offered.
       expect(find.text('Mark as cleared'), findsOneWidget);
+    });
+
+    testWidgets('a photo taken on the form lands on the saved payment', (
+      tester,
+    ) async {
+      await seed(tester, seedYear);
+      final supplier = await seed(tester, seedSupplier);
+      final photo = await seed(tester, () => tempPhoto('receipt.jpg'));
+
+      await pumpScreen(
+        tester,
+        const PaymentFormView(),
+        binding: PaymentFormBinding(),
+        arguments: {RouteArgs.presetSupplierId: supplier.id},
+      );
+      final form = Get.find<PaymentFormController>();
+      await settle(tester);
+
+      form.scans.photos.add(XFile(photo));
+      form.amount.text = '500';
+      await settle(tester);
+      expect(find.byTooltip('Remove this photo'), findsOneWidget);
+
+      await tester.tap(find.text('Record payment'));
+      // Several real writes: the record, its queue row, then the photo copy.
+      await settle(tester, rounds: 15);
+
+      final payments = await seed(
+        tester,
+        () => Get.find<SupplierPaymentRepository>().list(),
+      );
+      final filed = await seed(
+        tester,
+        () => Get.find<AttachmentRepository>().forEntity(
+          AttachmentEntityType.supplierPayment,
+          payments.single.id,
+        ),
+      );
+      expect(filed.single.documentType, DocumentType.supplierPaymentReceipt);
+
+      // Lets the confirmation toast finish, or its ticker outlives the test.
+      await tester.pump(const Duration(seconds: 5));
+      await settle(tester);
     });
 
     testWidgets('cheque register renders empty', (tester) async {
@@ -641,6 +752,95 @@ void main() {
       expect(find.text('A credit sale needs a customer'), findsOneWidget);
       final sales = await seed(tester, () => Get.find<SaleRepository>().list());
       expect(sales, isEmpty);
+    });
+  });
+
+  group('gallery', () {
+    testWidgets('renders empty', (tester) async {
+      await pumpScreen(
+        tester,
+        const GalleryView(),
+        binding: GalleryBinding(),
+      );
+
+      expect(find.text('No photos of bills yet'), findsOneWidget);
+    });
+
+    testWidgets('separates bills from receipts, under the supplier', (
+      tester,
+    ) async {
+      final year = await seed(tester, seedYear);
+      final supplier = await seed(tester, seedSupplier);
+      final bill = await seed(tester, () => seedBill(year.id, supplier.id));
+      final cheque = await seed(tester, () => seedCheque(year.id, supplier.id));
+      final billPhoto = await seed(tester, () => tempPhoto('bill.jpg'));
+      final chequePhoto = await seed(tester, () => tempPhoto('cheque.jpg'));
+      await seed(
+        tester,
+        () => Get.find<AttachmentRepository>().add(
+          entityType: AttachmentEntityType.purchase,
+          entityId: bill.id,
+          documentType: DocumentType.purchaseBill,
+          sourcePath: billPhoto,
+        ),
+      );
+      await seed(
+        tester,
+        () => Get.find<AttachmentRepository>().add(
+          entityType: AttachmentEntityType.supplierPayment,
+          entityId: cheque.id,
+          documentType: DocumentType.chequeCopy,
+          sourcePath: chequePhoto,
+        ),
+      );
+
+      await pumpScreen(
+        tester,
+        const GalleryView(),
+        binding: GalleryBinding(),
+      );
+
+      expect(find.text(supplier.name), findsOneWidget);
+      expect(find.text('Bill 4471'), findsOneWidget);
+      expect(find.textContaining('Cheque copy'), findsNothing);
+
+      await tester.tap(find.text('Receipts'));
+      await settle(tester);
+
+      expect(find.textContaining('Cheque copy'), findsOneWidget);
+      expect(find.text('Bill 4471'), findsNothing);
+    });
+
+    testWidgets('a filter that matches nothing can be cleared', (tester) async {
+      final year = await seed(tester, seedYear);
+      final supplier = await seed(tester, seedSupplier);
+      final bill = await seed(tester, () => seedBill(year.id, supplier.id));
+      final photo = await seed(tester, () => tempPhoto('bill.jpg'));
+      await seed(
+        tester,
+        () => Get.find<AttachmentRepository>().add(
+          entityType: AttachmentEntityType.purchase,
+          entityId: bill.id,
+          documentType: DocumentType.purchaseBill,
+          sourcePath: photo,
+        ),
+      );
+
+      await pumpScreen(
+        tester,
+        const GalleryView(),
+        binding: GalleryBinding(),
+      );
+      expect(find.text('Clear'), findsNothing);
+
+      final gallery = Get.find<GalleryController>();
+      gallery.setRange(const DateRange(from: 0, to: 1));
+      await settle(tester);
+      expect(find.text('No bills match'), findsOneWidget);
+
+      await tester.tap(find.text('Clear filters'));
+      await settle(tester);
+      expect(find.text('Bill 4471'), findsOneWidget);
     });
   });
 

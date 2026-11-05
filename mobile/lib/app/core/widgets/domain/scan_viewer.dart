@@ -1,9 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import '../../../data/models/attachment.dart';
 import '../../constants/app_sizes.dart';
+import '../../controllers/scan_capture.dart';
 import '../../extensions/context_ext.dart';
 import '../../theme/app_text_styles.dart';
 import '../app_card.dart';
@@ -41,44 +43,12 @@ class ScanStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-
     if (scans.isEmpty) {
-      return AppCard(
-        onTap: isAdding ? null : onAdd,
-        child: Row(
-          children: [
-            IconPlate(
-              icon: Icons.document_scanner_outlined,
-              color: palette.brand,
-            ),
-            AppSizes.gapMd,
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    emptyTitle,
-                    style: AppTextStyles.bodyStrong.copyWith(
-                      color: palette.ink,
-                    ),
-                  ),
-                  Text(
-                    emptyMessage,
-                    style: AppTextStyles.caption.copyWith(
-                      color: palette.inkMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            AppSizes.gapSm,
-            _busyOr(
-              palette.brand,
-              Icon(Icons.add_a_photo_outlined, color: palette.brand),
-            ),
-          ],
-        ),
+      return _AddScanCard(
+        title: emptyTitle,
+        message: emptyMessage,
+        isAdding: isAdding,
+        onAdd: onAdd,
       );
     }
 
@@ -90,34 +60,192 @@ class ScanStrip extends StatelessWidget {
         separatorBuilder: (_, _) => AppSizes.gapSm,
         itemBuilder: (context, index) {
           if (index == scans.length) {
-            return _Tile(
-              onTap: isAdding ? null : onAdd,
-              child: Center(
-                child: _busyOr(
-                  palette.inkMuted,
-                  Icon(Icons.add_a_photo_outlined, color: palette.inkMuted),
-                ),
-              ),
-            );
+            return _AddScanTile(isAdding: isAdding, onAdd: onAdd);
           }
 
           final scan = scans[index];
           return _Tile(
             onTap: () => onOpen(scan),
-            child: _Thumbnail(scan: scan),
+            child: ScanThumbnail(scan: scan),
           );
         },
       ),
     );
   }
+}
 
-  Widget _busyOr(Color color, Widget idle) => isAdding
-      ? SizedBox(
-          height: 20,
-          width: 20,
-          child: CircularProgressIndicator(strokeWidth: 2, color: color),
-        )
-      : idle;
+/// [ScanStrip] for a form: the same look, over photos waiting for the record to
+/// be saved. Nothing is filed yet, so a photo comes off with one tap rather than
+/// through the viewer and a confirmation.
+class ScanDraftStrip extends StatelessWidget {
+  const ScanDraftStrip({
+    super.key,
+    required this.draft,
+    required this.emptyTitle,
+    required this.emptyMessage,
+  });
+
+  final ScanDraft draft;
+  final String emptyTitle;
+  final String emptyMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final photos = draft.photos;
+      final isAdding = draft.isAdding.value;
+
+      if (photos.isEmpty) {
+        return _AddScanCard(
+          title: emptyTitle,
+          message: emptyMessage,
+          isAdding: isAdding,
+          onAdd: draft.add,
+        );
+      }
+
+      return SizedBox(
+        height: ScanStrip._thumbHeight,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: photos.length + 1,
+          separatorBuilder: (_, _) => AppSizes.gapSm,
+          itemBuilder: (context, index) {
+            if (index == photos.length) {
+              return _AddScanTile(isAdding: isAdding, onAdd: draft.add);
+            }
+
+            return _DraftPhoto(
+              path: photos[index].path,
+              onRemove: () => draft.removeAt(index),
+            );
+          },
+        ),
+      );
+    });
+  }
+}
+
+class _DraftPhoto extends StatelessWidget {
+  const _DraftPhoto({required this.path, required this.onRemove});
+
+  final String path;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Tile(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _PhotoFile(file: File(path)),
+          Align(
+            alignment: Alignment.topRight,
+            child: IconButton(
+              tooltip: 'Remove this photo',
+              onPressed: onRemove,
+              icon: const CircleAvatar(
+                radius: 12,
+                backgroundColor: Colors.black54,
+                child: Icon(Icons.close, size: 16, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The invitation shown while a record has no scans.
+class _AddScanCard extends StatelessWidget {
+  const _AddScanCard({
+    required this.title,
+    required this.message,
+    required this.isAdding,
+    required this.onAdd,
+  });
+
+  final String title;
+  final String message;
+  final bool isAdding;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return AppCard(
+      onTap: isAdding ? null : onAdd,
+      child: Row(
+        children: [
+          IconPlate(
+            icon: Icons.document_scanner_outlined,
+            color: palette.brand,
+          ),
+          AppSizes.gapMd,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppTextStyles.bodyStrong.copyWith(color: palette.ink),
+                ),
+                Text(
+                  message,
+                  style: AppTextStyles.caption.copyWith(
+                    color: palette.inkMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AppSizes.gapSm,
+          _AddScanIcon(isAdding: isAdding, color: palette.brand),
+        ],
+      ),
+    );
+  }
+}
+
+/// The last tile on a strip that already has photos.
+class _AddScanTile extends StatelessWidget {
+  const _AddScanTile({required this.isAdding, required this.onAdd});
+
+  final bool isAdding;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Tile(
+      onTap: isAdding ? null : onAdd,
+      child: Center(
+        child: _AddScanIcon(
+          isAdding: isAdding,
+          color: context.palette.inkMuted,
+        ),
+      ),
+    );
+  }
+}
+
+class _AddScanIcon extends StatelessWidget {
+  const _AddScanIcon({required this.isAdding, required this.color});
+
+  final bool isAdding;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return isAdding
+        ? SizedBox(
+            height: 20,
+            width: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: color),
+          )
+        : Icon(Icons.add_a_photo_outlined, color: color);
+  }
 }
 
 class _Tile extends StatelessWidget {
@@ -146,8 +274,9 @@ class _Tile extends StatelessWidget {
   }
 }
 
-class _Thumbnail extends StatelessWidget {
-  const _Thumbnail({required this.scan});
+/// A scan's photo, or a PDF icon for a file that has no picture to show.
+class ScanThumbnail extends StatelessWidget {
+  const ScanThumbnail({super.key, required this.scan});
 
   final ScanFile scan;
 
@@ -161,13 +290,27 @@ class _Thumbnail extends StatelessWidget {
       );
     }
 
+    return _PhotoFile(file: scan.file);
+  }
+}
+
+class _PhotoFile extends StatelessWidget {
+  const _PhotoFile({required this.file});
+
+  final File file;
+
+  @override
+  Widget build(BuildContext context) {
     return Image.file(
-      scan.file,
+      file,
       fit: BoxFit.cover,
       // Decoded at thumbnail size, not the photo's full resolution.
       cacheWidth: (ScanStrip._thumbWidth * 3).round(),
       errorBuilder: (_, _, _) => Center(
-        child: Icon(Icons.broken_image_outlined, color: palette.inkSubtle),
+        child: Icon(
+          Icons.broken_image_outlined,
+          color: context.palette.inkSubtle,
+        ),
       ),
     );
   }

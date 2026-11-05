@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/controllers/account_choice.dart';
+import '../../../core/controllers/scan_capture.dart';
 import '../../../core/domain/money.dart';
 import '../../../core/domain/pay_method.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/nepali_date.dart';
 import '../../../core/widgets/app_toast.dart';
+import '../../../data/enums/document_type.dart';
 import '../../../data/models/purchase.dart';
 import '../../../data/models/supplier.dart';
 import '../../../data/models/supplier_payment.dart';
@@ -44,6 +46,7 @@ class PaymentFormController extends GetxController {
   final Rxn<Purchase> againstBill = Rxn<Purchase>();
   final Rx<PayMethod> method = PayMethod.cash.obs;
   final AccountChoice account = AccountChoice();
+  final ScanDraft scans = ScanDraft(paper: 'receipt');
 
   /// Bumped as the amount is typed, so the banner keeps up with it.
   final RxInt amountRevision = 0.obs;
@@ -197,11 +200,25 @@ class PaymentFormController extends GetxController {
         ),
       );
 
-      AppToast.success(
-        isCheque
-            ? 'Cheque ${saved.chequeNo} recorded'
-            : '${saved.amount.display()} paid',
+      final unattached = await scans.attachTo(
+        entityType: AttachmentEntityType.supplierPayment,
+        entityId: saved.id,
+        documentType: isCheque
+            ? DocumentType.chequeCopy
+            : DocumentType.supplierPaymentReceipt,
       );
+      if (unattached > 0) {
+        AppToast.error(
+          'Payment saved, but $unattached photo(s) could not be attached. '
+          'Add them again from the payment.',
+        );
+      } else {
+        AppToast.success(
+          isCheque
+              ? 'Cheque ${saved.chequeNo} recorded'
+              : '${saved.amount.display()} paid',
+        );
+      }
       Get.offNamed<void>(
         Routes.paymentDetail,
         arguments: {RouteArgs.paymentId: saved.id},
