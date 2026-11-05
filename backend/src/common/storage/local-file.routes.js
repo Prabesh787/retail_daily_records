@@ -11,7 +11,7 @@ export const localFileRoutes = Router();
 
 localFileRoutes.get('/*key', async (req, res) => {
   const storageKey = req.params.key.join('/');
-  const absolutePath = await getFileStorage().resolveSignedDownload(
+  const absolutePath = await getFileStorage('local').resolveSignedDownload(
     storageKey,
     req.query.expires,
     req.query.signature,

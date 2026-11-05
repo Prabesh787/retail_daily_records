@@ -1,30 +1,26 @@
 import { env } from '../../config/env.js';
 import { AppError, ErrorCode } from '../errors/index.js';
+import { CloudinaryFileStorageService } from './cloudinary-file-storage.service.js';
 import { LocalFileStorageService } from './local-file-storage.service.js';
 
+export { CloudinaryFileStorageService } from './cloudinary-file-storage.service.js';
 export { LocalFileStorageService } from './local-file-storage.service.js';
 
+/** @type {Map<string, import('./file-storage.interface.js').FileStorageService>} */
+const instances = new Map();
+
 /** @type {import('./file-storage.interface.js').FileStorageService | null} */
-let instance = null;
+let override = null;
 
-/**
- * Resolves the driver named by STORAGE_DRIVER. Adding S3 or Cloudinary later
- * is one more `case` here plus a class satisfying FileStorageService - nothing
- * else in the application needs to know which driver is active.
- *
- * @returns {import('./file-storage.interface.js').FileStorageService}
- */
-export function getFileStorage() {
-  if (instance) return instance;
-
-  switch (env.STORAGE_DRIVER) {
+function createDriver(driver) {
+  switch (driver) {
     case 'local':
-      instance = new LocalFileStorageService();
-      return instance;
-    case 's3':
+      return new LocalFileStorageService();
     case 'cloudinary':
+      return new CloudinaryFileStorageService();
+    case 's3':
       throw new AppError(
-        `Storage driver "${env.STORAGE_DRIVER}" is not implemented yet`,
+        `Storage driver "${driver}" is not implemented yet`,
         501,
         ErrorCode.NOT_IMPLEMENTED,
       );
@@ -34,10 +30,26 @@ export function getFileStorage() {
 }
 
 /**
+ * New uploads use the driver named by STORAGE_DRIVER. Anything touching an
+ * existing file passes the `storage_driver` recorded on its row instead, so
+ * files written before a switch keep working after it. Adding S3 later is one
+ * more `case` above plus a class satisfying FileStorageService.
+ *
+ * @param {string} [driver]
+ * @returns {import('./file-storage.interface.js').FileStorageService}
+ */
+export function getFileStorage(driver = env.STORAGE_DRIVER) {
+  if (override) return override;
+
+  if (!instances.has(driver)) instances.set(driver, createDriver(driver));
+  return instances.get(driver);
+}
+
+/**
  * Test seam - lets a suite swap in a fake driver. Pass null to reset.
  *
  * @param {import('./file-storage.interface.js').FileStorageService | null} service
  */
 export function setFileStorage(service) {
-  instance = service;
+  override = service;
 }

@@ -152,23 +152,27 @@ documented list. Every variable is validated at boot by `src/config/env.js` —
 a missing or malformed value stops the process with a readable message instead
 of failing at the first request that needs it.
 
-| Variable                 | Default                       | Purpose                                             |
-| ------------------------ | ----------------------------- | --------------------------------------------------- |
-| `NODE_ENV`               | `development`                 | `development` \| `test` \| `production`             |
-| `PORT`                   | `4000`                        | HTTP port                                           |
-| `API_PREFIX`             | `/api/v1`                     | Mount point for every module router                 |
-| `CORS_ORIGIN`            | `*`                           | `*` or a comma-separated list of origins            |
-| `APP_TIMEZONE`           | `Asia/Kathmandu`              | Calendar day reports treat as "today"               |
-| `DATABASE_URL`           | — (**required**)              | Postgres connection string                          |
-| `JWT_SECRET`             | dev placeholder               | Token signing key — set a real one in production    |
-| `JWT_EXPIRES_IN`         | `1d`                          | Token lifetime                                      |
-| `BCRYPT_SALT_ROUNDS`     | `10`                          | Password hashing cost                               |
-| `AUTH_DEV_FALLBACK`      | `false`                       | Serve tokenless requests as the first admin (dev)   |
-| `STORAGE_DRIVER`         | `local`                       | `local` \| `s3` \| `cloudinary` (only local exists) |
-| `LOCAL_STORAGE_PATH`     | `./storage`                   | Where the local driver writes files                 |
-| `LOCAL_STORAGE_BASE_URL` | `http://localhost:4000/files` | Prefix for locally served file URLs                 |
-| `MAX_UPLOAD_SIZE_MB`     | `10`                          | Rejected above this size                            |
-| `LOG_LEVEL`              | `info`                        | `fatal` … `trace`                                   |
+| Variable                 | Default                       | Purpose                                                          |
+| ------------------------ | ----------------------------- | ---------------------------------------------------------------- |
+| `NODE_ENV`               | `development`                 | `development` \| `test` \| `production`                          |
+| `PORT`                   | `4000`                        | HTTP port                                                        |
+| `API_PREFIX`             | `/api/v1`                     | Mount point for every module router                              |
+| `CORS_ORIGIN`            | `*`                           | `*` or a comma-separated list of origins                         |
+| `APP_TIMEZONE`           | `Asia/Kathmandu`              | Calendar day reports treat as "today"                            |
+| `DATABASE_URL`           | — (**required**)              | Postgres connection string                                       |
+| `JWT_SECRET`             | dev placeholder               | Token signing key — set a real one in production                 |
+| `JWT_EXPIRES_IN`         | `1d`                          | Token lifetime                                                   |
+| `BCRYPT_SALT_ROUNDS`     | `10`                          | Password hashing cost                                            |
+| `AUTH_DEV_FALLBACK`      | `false`                       | Serve tokenless requests as the first admin (dev)                |
+| `STORAGE_DRIVER`         | `local`                       | Where new uploads go: `local` \| `cloudinary` (`s3` is reserved) |
+| `LOCAL_STORAGE_PATH`     | `./storage`                   | Where the local driver writes files                              |
+| `LOCAL_STORAGE_BASE_URL` | `http://localhost:4000/files` | Prefix for locally served file URLs                              |
+| `MAX_UPLOAD_SIZE_MB`     | `10`                          | Rejected above this size                                         |
+| `CLOUDINARY_CLOUD_NAME`  | —                             | Required when the driver is `cloudinary`                         |
+| `CLOUDINARY_API_KEY`     | —                             | Required when the driver is `cloudinary`                         |
+| `CLOUDINARY_API_SECRET`  | —                             | Required when the driver is `cloudinary`                         |
+| `CLOUDINARY_FOLDER`      | `retails_records`             | Prefix for uploads; use one per environment                      |
+| `LOG_LEVEL`              | `info`                        | `fatal` … `trace`                                                |
 
 Shop identity — name, address, phone and PAN — is **not** configuration. It is
 four columns on the `users` row, returned as `shop` by `GET /auth/me` and
@@ -247,7 +251,7 @@ src/
       request-context.js     Request id + per-request logging
       upload.js              Multipart handling for scanned evidence
     schemas/common.schema.js Shared field rules (money, dates, pagination)
-    storage/                 FileStorageService contract + local driver
+    storage/                 FileStorageService contract + local, Cloudinary drivers
     utils/                   Response envelope, async wrapper, pagination, money
 
   database/
@@ -527,11 +531,20 @@ in the logs.
 
 Bytes never enter Postgres. The file goes to whichever `FileStorageService` is
 configured and the database keeps only the metadata and the driver's
-`storage_key`. Moving to S3 or Cloudinary later means writing one class that
-satisfies `src/common/storage/file-storage.interface.js` and adding a case to
+`storage_key`. Adding S3 later means writing one class that satisfies
+`src/common/storage/file-storage.interface.js` and adding a case to
 `getFileStorage()` — no table, no column and no service signature changes.
-Each row also records the `storage_driver` that wrote it, so files uploaded
-before a switch stay resolvable afterwards.
+
+`STORAGE_DRIVER` only decides where new uploads go. Each row records the
+`storage_driver` that wrote it, and downloads and deletes use that driver, so
+files uploaded before a switch keep working and do not need migrating. Keep the
+old driver's settings for as long as any file lives there.
+
+`GET /api/v1/attachments/:id/download-url` returns a link that expires after
+five minutes, whichever driver holds the file. Cloudinary files are uploaded as
+`private`, so the original needs that signed link. Switch on Strict
+Transformations in the Cloudinary security settings too, otherwise resized or
+converted versions can be requested without a signature.
 
 ---
 

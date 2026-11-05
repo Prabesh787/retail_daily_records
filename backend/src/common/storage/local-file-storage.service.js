@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { env } from '../../config/env.js';
@@ -8,6 +8,7 @@ import {
   NotFoundError,
   PayloadTooLargeError,
 } from '../errors/index.js';
+import { sanitizeFolder } from './storage-path.js';
 
 /**
  * The extension is chosen from the (already allow-listed) MIME type, never from
@@ -155,16 +156,4 @@ function safeEqual(a, b) {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
-}
-
-/** Strips anything that could turn a folder name into a path traversal. */
-function sanitizeFolder(folder) {
-  const cleaned = folder
-    .split('/')
-    .map((segment) => segment.replace(/[^a-zA-Z0-9._-]/g, ''))
-    .filter((segment) => segment.length > 0 && segment !== '.' && segment !== '..')
-    .join('/');
-  return cleaned.length > 0
-    ? cleaned
-    : createHash('sha1').update(folder).digest('hex').slice(0, 12);
 }

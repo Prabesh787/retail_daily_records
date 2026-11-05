@@ -101,7 +101,9 @@ export const attachmentService = {
   /** Address the client can fetch the file from. Signed for object storage. */
   async getDownloadUrl(id) {
     const attachment = await this.getById(id);
-    const url = await getFileStorage().getDownloadUrl(attachment.storageKey);
+    const url = await getFileStorage(attachment.storageDriver).getDownloadUrl(
+      attachment.storageKey,
+    );
     return { ...attachment, url };
   },
 
@@ -111,14 +113,14 @@ export const attachmentService = {
    */
   async remove(id) {
     const attachment = await this.getById(id);
+    // Resolved before the row goes: an unavailable driver must not lose the row.
+    const storage = getFileStorage(attachment.storageDriver);
     await prisma.attachment.delete({ where: { id } });
-    await getFileStorage()
-      .delete(attachment.storageKey)
-      .catch((error) => {
-        logger.error(
-          { attachmentId: id, storageKey: attachment.storageKey, err: error },
-          'Attachment row deleted but the stored file could not be removed',
-        );
-      });
+    await storage.delete(attachment.storageKey).catch((error) => {
+      logger.error(
+        { attachmentId: id, storageKey: attachment.storageKey, err: error },
+        'Attachment row deleted but the stored file could not be removed',
+      );
+    });
   },
 };
