@@ -23,6 +23,8 @@ class SalePayment {
     this.status = PaymentStatus.cleared,
     this.remarks,
     this.createdAt = 0,
+    this.accountId,
+    this.accountName,
   });
 
   final String id;
@@ -36,6 +38,13 @@ class SalePayment {
   final PaymentStatus status;
   final String? remarks;
   final int createdAt;
+
+  /// The bank or wallet that received it. Null on cash, on a cheque not yet
+  /// deposited, and on lines recorded before accounts existed.
+  final String? accountId;
+
+  /// Joined in for display; not a stored column.
+  final String? accountName;
 
   /// Money actually taken.
   ///
@@ -56,6 +65,7 @@ class SalePayment {
         'status': status.value,
         'remarks': remarks,
         'created_at': createdAt,
+        'account_id': accountId,
       };
 
   Map<String, dynamic> toJson() => {
@@ -69,6 +79,7 @@ class SalePayment {
         'clearedDate': _isoOrNull(clearedDate),
         'status': status.value,
         'remarks': remarks,
+        'accountId': accountId,
       };
 
   static String? _isoOrNull(int? ms) =>
@@ -86,6 +97,8 @@ class SalePayment {
         status: PaymentStatus.fromValue(map['status'] as String?),
         remarks: map['remarks'] as String?,
         createdAt: SyncableModel.toInt(map['created_at']),
+        accountId: map['account_id'] as String?,
+        accountName: map['account_name'] as String?,
       );
 
   /// [id] is accepted so the repository can assign one to a payment line that
@@ -102,6 +115,7 @@ class SalePayment {
     PaymentStatus? status,
     String? remarks,
     int? createdAt,
+    String? accountId,
   }) =>
       SalePayment(
         id: id ?? this.id,
@@ -115,6 +129,8 @@ class SalePayment {
         status: status ?? this.status,
         remarks: remarks ?? this.remarks,
         createdAt: createdAt ?? this.createdAt,
+        accountId: accountId ?? this.accountId,
+        accountName: accountName,
       );
 
   static const String createTableSql = '''
@@ -130,7 +146,11 @@ class SalePayment {
       status       TEXT NOT NULL DEFAULT 'CLEARED',
       remarks      TEXT,
       created_at   INTEGER NOT NULL DEFAULT 0,
+      account_id   TEXT,
       FOREIGN KEY (sale_id) REFERENCES ${DbTables.sale} (id) ON DELETE CASCADE
     )
   ''';
+
+  static const String addAccountIdSql =
+      'ALTER TABLE ${DbTables.salePayment} ADD COLUMN account_id TEXT';
 }

@@ -7,9 +7,11 @@
 /// behind it. A screen imports both; nothing in the generic half imports this.
 library;
 
+export 'activity_row.dart';
 export 'balance_card.dart';
 export 'date_range_sheet.dart';
 export 'detail_list.dart';
 export 'rows.dart';
 export 'scan_viewer.dart';
 export 'status_badge.dart';
+export 'txn_form.dart';

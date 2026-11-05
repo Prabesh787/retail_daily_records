@@ -17,7 +17,7 @@ class SaleDetailController extends LoaderController<Sale> {
   late final String saleId;
 
   @override
-  List<String> get watches => const [DbTables.sale];
+  List<String> get watches => const [DbTables.sale, DbTables.customerPayment];
 
   Sale? get sale => data.value;
 
@@ -35,6 +35,23 @@ class SaleDetailController extends LoaderController<Sale> {
       throw const AppException('This sale is no longer in your records.');
     }
     return result;
+  }
+
+  /// Offered while something is still owed and there is someone to owe it.
+  bool get canReceive =>
+      sale?.customerId != null && (sale?.dueTotal.isPositive ?? false);
+
+  void receivePayment() {
+    final current = sale;
+    if (current == null) return;
+
+    Get.toNamed<void>(
+      Routes.receiptForm,
+      arguments: {
+        RouteArgs.presetCustomerId: current.customerId,
+        RouteArgs.presetSaleId: current.id,
+      },
+    );
   }
 
   void openDay() {

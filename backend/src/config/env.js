@@ -6,56 +6,74 @@ import { z } from 'zod';
  * Anything missing or malformed stops the process at boot instead of failing
  * at the first request that happens to need it.
  */
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(4000),
-  API_PREFIX: z.string().startsWith('/').default('/api/v1'),
-  CORS_ORIGIN: z.string().default('*'),
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().positive().default(4000),
+    API_PREFIX: z.string().startsWith('/').default('/api/v1'),
+    CORS_ORIGIN: z.string().default('*'),
 
-  /**
-   * The calendar day the shop is living in. Reports derive "today" from this,
-   * not from the server clock's UTC date - Kathmandu is UTC+05:45, so a
-   * UTC-derived day would lag behind the shop until 05:45 every morning.
-   */
-  APP_TIMEZONE: z
-    .string()
-    .default('Asia/Kathmandu')
-    .refine((zone) => {
-      try {
-        new Intl.DateTimeFormat('en-CA', { timeZone: zone });
-        return true;
-      } catch {
-        return false;
+    /**
+     * The calendar day the shop is living in. Reports derive "today" from this,
+     * not from the server clock's UTC date - Kathmandu is UTC+05:45, so a
+     * UTC-derived day would lag behind the shop until 05:45 every morning.
+     */
+    APP_TIMEZONE: z
+      .string()
+      .default('Asia/Kathmandu')
+      .refine((zone) => {
+        try {
+          new Intl.DateTimeFormat('en-CA', { timeZone: zone });
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'APP_TIMEZONE must be a valid IANA timezone, e.g. Asia/Kathmandu'),
+
+    DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+
+    JWT_SECRET: z.string().min(16).default('development-only-secret-change-me'),
+    JWT_EXPIRES_IN: z.string().default('1d'),
+    BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(4).max(15).default(10),
+
+    /**
+     * Development convenience: treat a request that carries no bearer token as
+     * the first active admin, so the API can be exercised with plain curl and by
+     * a frontend that has no login screen yet. Forced off in production below -
+     * it must never be the reason an endpoint is reachable.
+     *
+     * A plain z.coerce.boolean() would read the string "false" as true, hence
+     * the explicit enum.
+     */
+    AUTH_DEV_FALLBACK: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+
+    STORAGE_DRIVER: z.enum(['local', 's3', 'cloudinary']).default('local'),
+    LOCAL_STORAGE_PATH: z.string().default('./storage'),
+    LOCAL_STORAGE_BASE_URL: z.string().default('http://localhost:4000/files'),
+    MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(10),
+
+    CLOUDINARY_CLOUD_NAME: z.string().optional(),
+    CLOUDINARY_API_KEY: z.string().optional(),
+    CLOUDINARY_API_SECRET: z.string().optional(),
+    CLOUDINARY_FOLDER: z.string().default('retails_records'),
+
+    LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  })
+  .superRefine((values, ctx) => {
+    if (values.STORAGE_DRIVER !== 'cloudinary') return;
+    for (const key of ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET']) {
+      if (!values[key]) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: `${key} is required when STORAGE_DRIVER is cloudinary`,
+        });
       }
-    }, 'APP_TIMEZONE must be a valid IANA timezone, e.g. Asia/Kathmandu'),
-
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-
-  JWT_SECRET: z.string().min(16).default('development-only-secret-change-me'),
-  JWT_EXPIRES_IN: z.string().default('1d'),
-  BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(4).max(15).default(10),
-
-  /**
-   * Development convenience: treat a request that carries no bearer token as
-   * the first active admin, so the API can be exercised with plain curl and by
-   * a frontend that has no login screen yet. Forced off in production below -
-   * it must never be the reason an endpoint is reachable.
-   *
-   * A plain z.coerce.boolean() would read the string "false" as true, hence
-   * the explicit enum.
-   */
-  AUTH_DEV_FALLBACK: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
-
-  STORAGE_DRIVER: z.enum(['local', 's3', 'cloudinary']).default('local'),
-  LOCAL_STORAGE_PATH: z.string().default('./storage'),
-  LOCAL_STORAGE_BASE_URL: z.string().default('http://localhost:4000/files'),
-  MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(10),
-
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-});
+    }
+  });
 
 const parsed = envSchema.safeParse(process.env);
 

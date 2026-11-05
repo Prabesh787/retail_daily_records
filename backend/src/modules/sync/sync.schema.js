@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SaleType } from '../../database/generated/prisma/index.js';
+import { AccountType, SaleType } from '../../database/generated/prisma/index.js';
 import {
   adDate,
   blankAsAbsent,
@@ -63,9 +63,12 @@ export const syncEntityNames = Object.freeze([
   'fiscal_years',
   'suppliers',
   'customers',
+  'accounts',
   'purchases',
   'supplier_payments',
   'sales',
+  'customer_payments',
+  'account_entries',
 ]);
 
 const entityName = z.enum(syncEntityNames);
@@ -132,6 +135,22 @@ const customerPayloadSchema = z.object({
   ...syncMetaShape,
 });
 
+/**
+ * Added after the app first shipped, so absent has to stay absent: an older
+ * build that has never heard of accounts must not clear one with every push.
+ */
+const optionalAccountId = z.uuid().nullish();
+
+const accountPayloadSchema = z.object({
+  name: requiredText(120, 'An account needs a name'),
+  accountType: z.enum(Object.values(AccountType)),
+  accountNo: optionalText(60),
+  openingBalance: moneyAmount().default(0),
+  isActive: wireBoolean(true),
+  remarks: optionalText(2000),
+  ...syncMetaShape,
+});
+
 const purchasePayloadSchema = z.object({
   fiscalYearId: z.uuid('A fiscal year is required'),
   supplierId: z.uuid('A supplier is required'),
@@ -153,9 +172,59 @@ const supplierPaymentPayloadSchema = z
   .object({
     ...basePaymentShape,
     fiscalYearId: z.uuid('A fiscal year is required'),
+    accountId: optionalAccountId,
     ...syncMetaShape,
   })
   .superRefine(applyPaymentRules);
+
+/**
+ * Money in, under the same cheque and clearing rules as money out: the two are
+ * mirror images, and a rule that held in only one direction would be a bug.
+ */
+const {
+  supplierId: _supplierId,
+  purchaseId: _purchaseId,
+  ...sharedPaymentShape
+} = basePaymentShape;
+
+const customerPaymentPayloadSchema = z
+  .object({
+    ...sharedPaymentShape,
+    fiscalYearId: z.uuid('A fiscal year is required'),
+    customerId: z.uuid('A customer is required'),
+    saleId: optionalUuid,
+    accountId: optionalAccountId,
+    ...syncMetaShape,
+  })
+  .superRefine(applyPaymentRules);
+
+/** Money moved with no party. Has to touch at least one account, or it moved nowhere. */
+const accountEntryPayloadSchema = z
+  .object({
+    entryDate: adDate,
+    entryDateBs: bsDate,
+    fromAccountId: optionalUuid,
+    toAccountId: optionalUuid,
+    amount: moneyAmount({ positive: true }),
+    description: optionalText(255),
+    ...syncMetaShape,
+  })
+  .superRefine((data, ctx) => {
+    if (!data.fromAccountId && !data.toAccountId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['toAccountId'],
+        message: 'An entry has to name at least one account',
+      });
+    }
+    if (data.fromAccountId && data.fromAccountId === data.toAccountId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['toAccountId'],
+        message: 'A transfer has to go to a different account',
+      });
+    }
+  });
 
 /**
  * A sale travels whole - header, invoice lines and settlement in one payload.
@@ -193,6 +262,7 @@ const salePayloadSchema = z
            * sale carries whatever the device already knows.
            */
           clearedDate: optionalAdDate,
+          accountId: optionalAccountId,
         }),
       )
       .default([]),
@@ -221,9 +291,12 @@ export const syncPayloadSchemas = Object.freeze({
   fiscal_years: fiscalYearPayloadSchema,
   suppliers: supplierPayloadSchema,
   customers: customerPayloadSchema,
+  accounts: accountPayloadSchema,
   purchases: purchasePayloadSchema,
   supplier_payments: supplierPaymentPayloadSchema,
   sales: salePayloadSchema,
+  customer_payments: customerPaymentPayloadSchema,
+  account_entries: accountEntryPayloadSchema,
 });
 
 /**

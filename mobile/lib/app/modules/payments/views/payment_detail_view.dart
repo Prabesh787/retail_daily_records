@@ -95,6 +95,7 @@ class PaymentDetailView extends GetView<PaymentDetailController> {
                 payment.paymentDateBs,
               ),
             ),
+            DetailRow('Account', payment.accountName),
             DetailRow('Voucher', payment.voucherNo, mono: true),
             DetailRow('Cheque number', payment.chequeNo, mono: true),
             if (payment.chequeDate case final chequeDate?)
@@ -108,6 +109,21 @@ class PaymentDetailView extends GetView<PaymentDetailController> {
             DetailRow('Description', payment.description),
             DetailRow('Remarks', payment.remarks),
           ],
+        ),
+        AppSizes.gapLg,
+
+        SectionHeader(
+          title: 'RECEIPT OR CHEQUE PHOTO (${controller.scans.length})',
+        ),
+        ScanStrip(
+          scans: controller.scans,
+          isAdding: controller.isAttaching.value,
+          onAdd: controller.attachScan,
+          onOpen: controller.openScan,
+          emptyTitle: 'Attach the receipt or cheque',
+          emptyMessage:
+              'Photograph it so the payment is on record even if the paper is '
+              'lost.',
         ),
         AppSizes.gapLg,
 
@@ -148,7 +164,7 @@ class _AmountCard extends StatelessWidget {
           Text(
             payment.amount.display(),
             style: AppTextStyles.display.copyWith(
-              color: cancelled ? palette.inkSubtle : palette.moneyIn,
+              color: cancelled ? palette.inkSubtle : palette.moneyOut,
               // Struck through, because the figure is still on the record but
               // no longer settles anything.
               decoration: cancelled ? TextDecoration.lineThrough : null,
@@ -196,7 +212,7 @@ class _Actions extends StatelessWidget {
               label: 'Mark as cleared',
               icon: Icons.check_circle_outline_rounded,
               isLoading: controller.isActing.value,
-              onPressed: controller.clear,
+              onPressed: () => controller.clear(context),
             ),
           if (controller.canClear && controller.canCancel) AppSizes.gapMd,
           if (controller.canCancel)

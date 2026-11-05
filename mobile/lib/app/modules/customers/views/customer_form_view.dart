@@ -37,18 +37,28 @@ class CustomerFormView extends GetView<CustomerFormController> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // What this customer has bought, when there is a history to show.
-              // It is the only figure a customer carries, and it is what makes
-              // the difference between a regular and a one-off legible.
+              // What they owe and what they have bought, when there is a
+              // history to show, with the way to settle it right there.
               if (controller.existing?.saleCount case final count?
                   when count > 0) ...[
                 StatTile(
-                  icon: Icons.receipt_rounded,
-                  label: 'BOUGHT SO FAR',
-                  value:
-                      controller.existing!.saleTotal?.display(decimals: false) ??
-                          '—',
-                  foot: '$count sale${count == 1 ? '' : 's'}',
+                  icon: Icons.south_west_rounded,
+                  label: 'TO RECEIVE',
+                  tone: MoneyTone.inbound,
+                  value: controller.owed.isPositive
+                      ? controller.owed.display(decimals: false)
+                      : 'Settled',
+                  foot:
+                      '$count sale${count == 1 ? '' : 's'} · '
+                      '${controller.existing!.saleTotal?.display(decimals: false) ?? '—'} '
+                      'bought',
+                ),
+                AppSizes.gapSm,
+                AppButton(
+                  label: 'Receive payment',
+                  icon: Icons.south_west_rounded,
+                  color: context.palette.moneyIn,
+                  onPressed: controller.receivePayment,
                 ),
                 AppSizes.gapMd,
               ],

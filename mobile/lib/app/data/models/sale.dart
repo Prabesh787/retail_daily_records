@@ -42,6 +42,7 @@ class Sale extends SyncableModel {
     this.items = const [],
     this.payments = const [],
     this.customerName,
+    this.laterReceived = Money.zero,
   });
 
   final String fiscalYearId;
@@ -72,12 +73,16 @@ class Sale extends SyncableModel {
   /// Joined in for display; not a stored column.
   final String? customerName;
 
+  /// Payment In recorded against this sale afterwards. Joined in by the DAO; it
+  /// lives on its own rows, not among [payments].
+  final Money laterReceived;
+
   /// What was actually taken, ignoring credit lines and cancelled instruments.
   Money get settledTotal =>
       Money.sum(payments.map((payment) => payment.settledAmount));
 
   /// What the customer still owes on this sale.
-  Money get dueTotal => totalAmount - settledTotal;
+  Money get dueTotal => totalAmount - settledTotal - laterReceived;
 
   bool get isFullyPaid => payments.isNotEmpty && dueTotal.isZero;
 
@@ -164,6 +169,7 @@ class Sale extends SyncableModel {
         items: items ?? const [],
         payments: payments ?? const [],
         customerName: map['customer_name'] as String?,
+        laterReceived: Money.fromColumn(map['later_received']),
       );
 
   Sale copyWith({
@@ -209,6 +215,7 @@ class Sale extends SyncableModel {
         items: items ?? this.items,
         payments: payments ?? this.payments,
         customerName: customerName ?? this.customerName,
+        laterReceived: laterReceived,
       );
 
   static const String createTableSql = '''

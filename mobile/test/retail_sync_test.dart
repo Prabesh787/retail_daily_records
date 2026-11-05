@@ -348,9 +348,12 @@ void main() {
         DbTables.fiscalYear,
         DbTables.supplier,
         DbTables.customer,
+        DbTables.account,
         DbTables.purchase,
         DbTables.supplierPayment,
         DbTables.sale,
+        DbTables.customerPayment,
+        DbTables.accountEntry,
       ]);
       expect(buildSyncers(db).map((s) => s.entity), DbTables.syncable);
     });

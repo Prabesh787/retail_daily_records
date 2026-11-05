@@ -3,9 +3,10 @@
  * vouchers, cheque copies).
  *
  * The database only ever holds the returned `storageKey` - never the bytes.
- * Swapping local disk for S3 or Cloudinary later means writing one more class
- * that satisfies this contract and changing STORAGE_DRIVER; no table, no
- * column and no service signature has to change.
+ * Adding S3 later means writing one more class that satisfies this contract
+ * and changing STORAGE_DRIVER; no table, no column and no service signature has
+ * to change. The key is all a driver gets back, so it must hold everything the
+ * driver needs to find the file again.
  *
  * @typedef {object} StoredFile
  * @property {string} storageKey       Driver-relative id saved in `attachments.storage_key`.

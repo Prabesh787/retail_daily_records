@@ -2,35 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_sizes.dart';
+import '../../../core/domain/pay_method.dart';
 import '../../../core/extensions/context_ext.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/domain/domain_widgets.dart';
 import '../../../core/widgets/widgets.dart';
-import '../../../data/enums/sale_payment_mode.dart';
 import '../../../data/enums/sale_type.dart';
 import '../../../data/models/customer.dart';
+import '../../../data/models/ledger.dart';
 import '../controllers/sale_form_controller.dart';
 
 /// The sale form.
 ///
-/// The biggest screen in the app, and the only one with two shapes. "Total
-/// only" is a day's counter takings keyed as one figure; "Itemised" is an
-/// invoice with lines. The choice comes first because it decides what the rest
-/// of the form asks for.
+/// A sale is an amount and how it was paid, and that is all this screen asks for
+/// up front. A customer is needed only for credit, and items only if the
+/// shopkeeper wants them. Purchase uses the same layout in red.
 class SaleFormView extends GetView<SaleFormController> {
   const SaleFormView({super.key});
 
-  static const List<Segment<SaleType>> _types = [
-    Segment(value: SaleType.summary, label: 'Total only'),
-    Segment(value: SaleType.detailed, label: 'Itemised'),
-  ];
-
-  static const List<Segment<SalePaymentMode>> _modes = [
-    Segment(value: SalePaymentMode.cash, label: 'Cash'),
-    Segment(value: SalePaymentMode.bank, label: 'Bank'),
-    Segment(value: SalePaymentMode.cheque, label: 'Cheque'),
-    Segment(value: SalePaymentMode.credit, label: 'Credit'),
+  static const List<PayMethod> _methods = [
+    PayMethod.cash,
+    PayMethod.bank,
+    PayMethod.cheque,
+    PayMethod.credit,
   ];
 
   @override
@@ -48,11 +43,22 @@ class SaleFormView extends GetView<SaleFormController> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Obx(() {
+              controller.itemsRevision.value;
+              return TxnBanner(
+                kind: ActivityKind.sale,
+                amount: controller.grandTotal,
+              );
+            }),
+            AppSizes.gapMd,
+
             Obx(
-              () => SegmentedControl<SaleType>(
-                segments: _types,
-                value: controller.saleType.value,
-                onChanged: controller.setSaleType,
+              () => DocHeader(
+                numberLabel: 'Invoice no.',
+                number: controller.invoiceNo,
+                numberHint: 'Optional',
+                date: controller.saleDate.value,
+                onDate: controller.setDate,
               ),
             ),
             AppSizes.gapMd,
@@ -68,18 +74,20 @@ class SaleFormView extends GetView<SaleFormController> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'How it was settled',
-                    style: AppTextStyles.caption.copyWith(
-                      color: context.palette.inkMuted,
-                    ),
-                  ),
-                  AppSizes.gapXs,
                   Obx(
-                    () => SegmentedControl<SalePaymentMode>(
-                      segments: _modes,
-                      value: controller.paymentMode.value,
-                      onChanged: controller.setPaymentMode,
+                    () => PayMethodSection(
+                      label: 'How was it paid?',
+                      methods: _methods,
+                      method: controller.method.value,
+                      onChanged: controller.setMethod,
+                      account: controller.account,
+                      accountLabel: 'Received in',
+                      chequeNo: controller.chequeNo,
+                      chequeDate: controller.chequeDate.value,
+                      onChequeDate: controller.setChequeDate,
+                      chequeNote:
+                          'Listed under Cheques until you mark it cleared, and '
+                          'added to the bank balance only then.',
                     ),
                   ),
                   AppSizes.gapMd,
@@ -103,74 +111,47 @@ class SaleFormView extends GetView<SaleFormController> {
                           : () => controller.setCustomer(null),
                     ),
                   ),
-
-                  // Not asked for on a credit sale: nothing is being settled,
-                  // and a "paid now" box on it would invite a contradiction.
-                  Obx(
-                    () => controller.isCredit
-                        ? const SizedBox.shrink()
-                        : Padding(
-                            padding: const EdgeInsets.only(top: AppSizes.md),
-                            child: AppTextField.amount(
-                              label: 'Paid now',
-                              controller: controller.paidAmount,
-                              hint: 'Leave empty if paid in full',
-                              onChanged: (_) =>
-                                  controller.itemsRevision.value++,
-                            ),
-                          ),
-                  ),
                 ],
               ),
             ),
-            AppSizes.gapMd,
+            AppSizes.gapSm,
 
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Obx(
-                    () => DateField(
-                      label: 'Sale date',
-                      value: controller.saleDate.value,
-                      onChanged: controller.setDate,
-                    ),
-                  ),
-                  AppSizes.gapMd,
-                  AppTextField(
-                    label: 'Sale date (BS)',
-                    controller: controller.saleDateBs,
-                    keyboardType: TextInputType.datetime,
-                    textInputAction: TextInputAction.next,
-                  ),
-                  AppSizes.gapMd,
-                  AppTextField(
-                    label: 'Invoice number',
-                    controller: controller.invoiceNo,
-                    textInputAction: TextInputAction.next,
-                    hint: 'Optional, must be unique this year',
-                  ),
-                ],
-              ),
-            ),
-            AppSizes.gapMd,
-
-            AppCard(
-              child: Column(
-                children: [
-                  AppTextField(
-                    label: 'Description',
-                    controller: controller.description,
-                    textInputAction: TextInputAction.next,
-                  ),
-                  AppSizes.gapMd,
-                  AppTextField(
-                    label: 'Remarks',
-                    controller: controller.remarks,
-                    maxLines: 3,
-                  ),
-                ],
-              ),
+            MoreDetails(
+              children: [
+                // Not asked for on a credit sale: nothing is being settled, and
+                // a "paid now" box on it would invite a contradiction.
+                Obx(
+                  () => controller.isCredit
+                      ? const SizedBox.shrink()
+                      : AppTextField.amount(
+                          label: 'Paid now, if only part',
+                          controller: controller.paidAmount,
+                          hint: 'Leave empty if paid in full',
+                          onChanged: (_) => controller.itemsRevision.value++,
+                        ),
+                ),
+                AppTextField.amount(
+                  label: 'Discount',
+                  controller: controller.discount,
+                  onChanged: (_) => controller.itemsRevision.value++,
+                ),
+                AppTextField(
+                  label: 'Date as written on the bill (BS)',
+                  controller: controller.saleDateBs,
+                  keyboardType: TextInputType.datetime,
+                  textInputAction: TextInputAction.next,
+                ),
+                AppTextField(
+                  label: 'Description',
+                  controller: controller.description,
+                  textInputAction: TextInputAction.next,
+                ),
+                AppTextField(
+                  label: 'Remarks',
+                  controller: controller.remarks,
+                  maxLines: 3,
+                ),
+              ],
             ),
             AppSizes.gapLg,
           ],
@@ -179,18 +160,14 @@ class SaleFormView extends GetView<SaleFormController> {
     );
   }
 
-  /// What this customer has bought before.
-  ///
-  /// Not what they owe: unlike a supplier, a customer carries no derived
-  /// balance in this system — receivables live on the sales themselves. Saying
-  /// "owes nothing" here would be a claim the data cannot support.
+  /// What this customer already owes, so a new credit sale has context.
   String? _customerNote(Customer? customer) {
-    final count = customer?.saleCount;
-    final total = customer?.saleTotal;
-    if (count == null || total == null || count == 0) return null;
+    final owed = customer?.receivable;
+    if (owed == null) return null;
 
-    return '$count sale${count == 1 ? '' : 's'} · '
-        '${total.display(decimals: false)}';
+    return owed.isPositive
+        ? 'Already owes ${owed.display(decimals: false)}'
+        : 'Nothing owed';
   }
 
   Future<void> _pickCustomer(BuildContext context) async {
@@ -200,7 +177,8 @@ class SaleFormView extends GetView<SaleFormController> {
       hint: 'Name or phone',
       search: controller.searchCustomers,
       emptyTitle: 'No customers match',
-      emptyMessage: 'A counter sale does not need one — leave it as walk-in.',
+      emptyMessage: 'Add them under the Parties tab. A cash sale does not need '
+          'one.',
       itemBuilder: (customer, select) =>
           CustomerRow(customer: customer, onTap: select),
     );
@@ -209,7 +187,8 @@ class SaleFormView extends GetView<SaleFormController> {
   }
 }
 
-/// The single-figure shape: what the counter took, typed straight in.
+/// The single-figure shape: what the counter took, typed straight in, with
+/// items one tap away for the shopkeeper who wants them.
 class _SummaryAmount extends StatelessWidget {
   const _SummaryAmount({required this.controller});
 
@@ -219,20 +198,24 @@ class _SummaryAmount extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AppTextField.amount(
-            label: 'Sale total',
+            label: 'Total amount',
             controller: controller.summaryTotal,
             validator: Validators.amount,
             autofocus: true,
             textInputAction: TextInputAction.next,
             onChanged: (_) => controller.itemsRevision.value++,
           ),
-          AppSizes.gapMd,
-          AppTextField.amount(
-            label: 'Discount',
-            controller: controller.discount,
-            onChanged: (_) => controller.itemsRevision.value++,
+          AppSizes.gapSm,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => controller.setSaleType(SaleType.detailed),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add items'),
+            ),
           ),
         ],
       ),
@@ -281,19 +264,15 @@ class _Lines extends StatelessWidget {
             AppOutlinedButton(
               label: 'Add line',
               icon: Icons.add_rounded,
-              expanded: false,
               onPressed: controller.addItem,
+            ),
+            TextButton(
+              onPressed: () => controller.setSaleType(SaleType.summary),
+              child: const Text('Enter a total instead'),
             ),
 
             AppSizes.gapMd,
             const RowDivider(full: true),
-            AppSizes.gapMd,
-
-            AppTextField.amount(
-              label: 'Discount',
-              controller: controller.discount,
-              onChanged: (_) => controller.itemsRevision.value++,
-            ),
             AppSizes.gapMd,
 
             Row(
@@ -436,22 +415,7 @@ class _SaveBar extends StatelessWidget {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Total',
-                  style: AppTextStyles.body.copyWith(color: palette.inkMuted),
-                ),
-              ),
-              Text(
-                controller.grandTotal.display(),
-                style: AppTextStyles.amount.copyWith(color: palette.ink),
-              ),
-            ],
-          ),
           if (due.isPositive) ...[
-            AppSizes.gapXs,
             Row(
               children: [
                 Expanded(
@@ -471,10 +435,11 @@ class _SaveBar extends StatelessWidget {
                 ),
               ],
             ),
+            AppSizes.gapSm,
           ],
-          AppSizes.gapMd,
           AppButton(
             label: 'Save sale',
+            color: palette.moneyIn,
             isLoading: controller.isSaving.value,
             onPressed: controller.save,
           ),

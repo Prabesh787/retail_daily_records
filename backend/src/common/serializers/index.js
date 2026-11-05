@@ -123,6 +123,37 @@ export function serializeSale(sale) {
   };
 }
 
+/** @param {object} account */
+export function serializeAccount(account) {
+  if (!account) return null;
+  return { ...account, openingBalance: serializeMoney(account.openingBalance) };
+}
+
+/** @param {object} payment Money received from a customer. */
+export function serializeCustomerPayment(payment) {
+  if (!payment) return null;
+  return {
+    ...payment,
+    paymentDate: toIsoDate(payment.paymentDate),
+    paymentDateBs: bsFor(payment.paymentDateBs, payment.paymentDate),
+    chequeDate: toIsoDate(payment.chequeDate),
+    chequeDateBs: payment.chequeDate ? bsFor(payment.chequeDateBs, payment.chequeDate) : null,
+    clearedDate: toIsoDate(payment.clearedDate),
+    amount: serializeMoney(payment.amount),
+  };
+}
+
+/** @param {object} entry Money moved with no party attached. */
+export function serializeAccountEntry(entry) {
+  if (!entry) return null;
+  return {
+    ...entry,
+    entryDate: toIsoDate(entry.entryDate),
+    entryDateBs: bsFor(entry.entryDateBs, entry.entryDate),
+    amount: serializeMoney(entry.amount),
+  };
+}
+
 /** @param {object} fiscalYear */
 export function serializeFiscalYear(fiscalYear) {
   if (!fiscalYear) return null;

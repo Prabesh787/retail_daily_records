@@ -120,6 +120,7 @@ class SupplierPaymentRepository extends BaseRepository {
             chequeDateBs: payment.chequeDateBs ??
                 NepaliDate.msToBs(payment.chequeDate ?? payment.paymentDate),
             referenceNo: payment.referenceNo,
+            accountId: payment.accountId,
             // Cash is cleared the moment it changes hands, so it carries the
             // payment date; an issued cheque has cleared on no date at all.
             clearedDate:
@@ -148,7 +149,11 @@ class SupplierPaymentRepository extends BaseRepository {
   /// [clearedOnMs] defaults to the cheque's own date rather than today: a
   /// cheque marked cleared a week late still cleared on the day the bank
   /// debited it, and the reports read that date.
-  Future<SupplierPayment?> markCleared(String id, {int? clearedOnMs}) async {
+  Future<SupplierPayment?> markCleared(
+    String id, {
+    int? clearedOnMs,
+    String? accountId,
+  }) async {
     final existing = await byId(id);
     if (existing == null) return null;
 
@@ -162,6 +167,7 @@ class SupplierPaymentRepository extends BaseRepository {
       existing.copyWith(
         status: PaymentStatus.cleared,
         clearedDate: clearedOnMs ?? existing.chequeDate ?? existing.paymentDate,
+        accountId: accountId,
       ),
     );
   }

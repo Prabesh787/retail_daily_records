@@ -25,6 +25,7 @@ class SalesView extends GetView<SalesController> {
   Widget build(BuildContext context) {
     return AppScreen(
       title: 'Sales',
+      back: true,
       padded: false,
       onRefresh: controller.reload,
       headerExtra: SearchField(

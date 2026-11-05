@@ -2,6 +2,7 @@ import '../../core/constants/db_constants.dart';
 import '../../core/domain/money.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/utils/nepali_date.dart';
+import '../enums/payment_status.dart';
 import '../enums/sale_payment_mode.dart';
 import '../enums/sale_type.dart';
 import '../enums/sync_status.dart';
@@ -101,7 +102,14 @@ class SaleRepository extends BaseRepository {
     }
 
     final isNew = sale.id.isEmpty;
-    final invoiceNo = sale.invoiceNo?.trim();
+    var invoiceNo = sale.invoiceNo?.trim();
+
+    // The server refuses an itemised sale with no invoice number, permanently,
+    // so it would sit on this phone and never sync. Number it rather than make
+    // the shopkeeper think of one.
+    if (sale.saleType.hasItems && (invoiceNo == null || invoiceNo.isEmpty)) {
+      invoiceNo = await dbService.sales.nextInvoiceNo(sale.fiscalYearId);
+    }
 
     if (invoiceNo != null && invoiceNo.isNotEmpty) {
       if (await dbService.sales.invoiceNoExists(
@@ -192,6 +200,36 @@ class SaleRepository extends BaseRepository {
     });
 
     return stamped;
+  }
+
+  /// Moves one payment line along: a customer's cheque clearing into an account,
+  /// or bouncing. The sale travels whole on the wire, so the whole sale is saved
+  /// again with the one line changed.
+  Future<Sale?> updatePaymentLine(
+    String saleId,
+    String lineId, {
+    required PaymentStatus status,
+    String? accountId,
+    int? clearedOnMs,
+  }) async {
+    final sale = await byId(saleId);
+    if (sale == null) return null;
+
+    return save(
+      sale.copyWith(
+        payments: [
+          for (final line in sale.payments)
+            if (line.id == lineId)
+              line.copyWith(
+                status: status,
+                accountId: accountId,
+                clearedDate: clearedOnMs,
+              )
+            else
+              line,
+        ],
+      ),
+    );
   }
 
   /// Soft delete.

@@ -18,10 +18,12 @@ class SupplierPaymentDao {
   static String get _select => '''
     SELECT sp.*,
       s.name    AS supplier_name,
-      p.bill_no AS purchase_bill_no
+      p.bill_no AS purchase_bill_no,
+      a.name    AS account_name
     FROM ${DbTables.supplierPayment} sp
     LEFT JOIN ${DbTables.supplier} s ON s.id = sp.supplier_id
     LEFT JOIN ${DbTables.purchase} p ON p.id = sp.purchase_id
+    LEFT JOIN ${DbTables.account} a ON a.id = sp.account_id
   ''';
 
   Future<List<SupplierPayment>> all({

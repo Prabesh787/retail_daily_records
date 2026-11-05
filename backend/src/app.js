@@ -45,11 +45,9 @@ export function createApp() {
 
   app.use(env.API_PREFIX, apiRouter);
 
-  // Uploaded bills, reachable only through signed links. Other drivers hand
-  // out their own URLs (e.g. S3 presigned), so nothing is mounted for them.
-  if (env.STORAGE_DRIVER === 'local') {
-    app.use(new URL(env.LOCAL_STORAGE_BASE_URL).pathname, localFileRoutes);
-  }
+  // Bills on local disk, reachable only through signed links. Mounted whatever
+  // STORAGE_DRIVER says, because files uploaded before a switch stay here.
+  app.use(new URL(env.LOCAL_STORAGE_BASE_URL).pathname, localFileRoutes);
 
   // Order matters: unmatched route first, then the single error responder.
   app.use(notFoundHandler);

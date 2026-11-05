@@ -12,10 +12,9 @@ import '../controllers/more_controller.dart';
 
 /// Everything that does not earn a tab.
 ///
-/// Five tabs is the practical ceiling for a thumb-reachable bar, so the cheque
-/// register, customers, fiscal years and shop details live here — along with
-/// the two things every app needs somewhere and nowhere in particular: the
-/// theme, and the way out.
+/// Five tabs is the practical ceiling for a thumb-reachable bar, so the reports,
+/// fiscal years and shop details live here — along with the two things every app
+/// needs somewhere and nowhere in particular: the theme, and the way out.
 class MoreView extends GetView<MoreController> {
   const MoreView({super.key});
 
@@ -67,30 +66,63 @@ class MoreView extends GetView<MoreController> {
           ),
           AppSizes.gapLg,
 
-          const SectionHeader(title: 'MONEY'),
+          const SectionHeader(title: 'REPORTS'),
           AppCard.flush(
             child: Column(
               children: [
                 AppListRow(
                   leading: IconPlate(
+                    icon: Icons.today_rounded,
+                    color: palette.brand,
+                  ),
+                  title: 'Day book',
+                  subtitle: 'Everything that happened on one day',
+                  chevron: true,
+                  onTap: () => Get.toNamed<void>(Routes.saleDay),
+                ),
+                const RowDivider(),
+                AppListRow(
+                  leading: IconPlate(
+                    icon: Icons.sell_rounded,
+                    color: palette.moneyIn,
+                  ),
+                  title: 'Sales by day',
+                  subtitle: 'What was sold and what was taken',
+                  chevron: true,
+                  onTap: () => Get.toNamed<void>(Routes.sales),
+                ),
+                const RowDivider(),
+                AppListRow(
+                  leading: IconPlate(
+                    icon: Icons.shopping_cart_rounded,
+                    color: palette.moneyOut,
+                  ),
+                  title: 'Purchase bills',
+                  subtitle: 'Every bill, and which are unpaid',
+                  chevron: true,
+                  onTap: () => Get.toNamed<void>(Routes.purchases),
+                ),
+                const RowDivider(),
+                AppListRow(
+                  leading: IconPlate(
                     icon: Icons.account_balance_wallet_rounded,
                     color: palette.pending,
                   ),
-                  title: 'Cheque register',
-                  subtitle: 'Cheques written but not yet cleared',
+                  title: 'Cheques',
+                  subtitle: 'To collect and to pay, with their dates',
                   chevron: true,
                   onTap: () => Get.toNamed<void>(Routes.cheques),
                 ),
                 const RowDivider(),
                 AppListRow(
                   leading: IconPlate(
-                    icon: Icons.people_rounded,
+                    icon: Icons.photo_library_rounded,
                     color: palette.brand,
                   ),
-                  title: 'Customers',
-                  subtitle: 'The people you invoice',
+                  title: 'Bill gallery',
+                  subtitle: 'Photos of bills and receipts, by supplier',
                   chevron: true,
-                  onTap: () => Get.toNamed<void>(Routes.customers),
+                  onTap: () => Get.toNamed<void>(Routes.gallery),
                 ),
               ],
             ),

@@ -2,40 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_sizes.dart';
+import '../../../core/domain/pay_method.dart';
 import '../../../core/extensions/context_ext.dart';
-import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/domain/domain_widgets.dart';
 import '../../../core/widgets/widgets.dart';
-import '../../../data/enums/supplier_payment_mode.dart';
+import '../../../data/models/ledger.dart';
 import '../../../data/models/purchase.dart';
 import '../../../data/models/supplier.dart';
 import '../controllers/payment_form_controller.dart';
 
 
-/// The payment form.
-///
-/// Mode is chosen high up because it changes what the rest of the form asks
-/// for: a cheque needs its number and the date written on it, a transfer needs
-/// a reference, cash needs neither. Those fields appear only for the mode that
-/// uses them rather than sitting greyed out.
+/// Payment Out: money paid to a supplier, on the same layout as every other
+/// money form, in red. Payment In is this screen's mirror in green.
 class PaymentFormView extends GetView<PaymentFormController> {
   const PaymentFormView({super.key});
 
-  static const List<Segment<SupplierPaymentMode>> _modes = [
-    Segment(value: SupplierPaymentMode.cash, label: 'Cash'),
-    Segment(value: SupplierPaymentMode.cheque, label: 'Cheque'),
-    Segment(value: SupplierPaymentMode.bankTransfer, label: 'Transfer'),
+  static const List<PayMethod> _methods = [
+    PayMethod.cash,
+    PayMethod.bank,
+    PayMethod.cheque,
   ];
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return AppScreen(
-      title: 'Record payment',
+      title: 'Payment Out',
       back: true,
       bottomBar: Obx(
         () => AppButton(
           label: controller.isCheque ? 'Record cheque' : 'Record payment',
+          color: palette.moneyOut,
           isLoading: controller.isSaving.value,
           onPressed: controller.save,
         ),
@@ -45,6 +44,26 @@ class PaymentFormView extends GetView<PaymentFormController> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Obx(() {
+              controller.amountRevision.value;
+              return TxnBanner(
+                kind: ActivityKind.paymentOut,
+                amount: controller.typedAmount,
+              );
+            }),
+            AppSizes.gapMd,
+
+            Obx(
+              () => DocHeader(
+                numberLabel: 'Voucher no.',
+                number: controller.voucherNo,
+                numberHint: 'Optional',
+                date: controller.paymentDate.value,
+                onDate: controller.setDate,
+              ),
+            ),
+            AppSizes.gapMd,
+
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,15 +86,7 @@ class PaymentFormView extends GetView<PaymentFormController> {
                     controller: controller.amount,
                     validator: Validators.amount,
                     textInputAction: TextInputAction.next,
-                  ),
-                  AppSizes.gapMd,
-                  Obx(
-                    () => _BillField(
-                      bill: controller.againstBill.value,
-                      enabled: controller.supplier.value != null,
-                      onTap: () => _pickBill(context),
-                      onClear: () => controller.setBill(null),
-                    ),
+                    onChanged: (_) => controller.amountRevision.value++,
                   ),
                 ],
               ),
@@ -83,91 +94,74 @@ class PaymentFormView extends GetView<PaymentFormController> {
             AppSizes.gapMd,
 
             AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'How it was paid',
-                    style: AppTextStyles.caption.copyWith(
-                      color: context.palette.inkMuted,
-                    ),
-                  ),
-                  AppSizes.gapXs,
-                  Obx(
-                    () => SegmentedControl<SupplierPaymentMode>(
-                      segments: _modes,
-                      value: controller.mode.value,
-                      onChanged: controller.setMode,
-                    ),
-                  ),
+              child: Obx(
+                () => PayMethodSection(
+                  label: 'How was it paid?',
+                  methods: _methods,
+                  method: controller.method.value,
+                  onChanged: controller.setMethod,
+                  account: controller.account,
+                  accountLabel: 'Paid from',
+                  chequeNo: controller.chequeNo,
+                  chequeDate: controller.chequeDate.value,
+                  onChequeDate: controller.setChequeDate,
+                  chequeAccountLabel: 'Drawn on',
+                  chequeNote:
+                      'This reduces what you owe straight away, but stays '
+                      'listed as not cleared until the bank takes it.',
+                ),
+              ),
+            ),
+            AppSizes.gapMd,
 
-                  Obx(() {
-                    if (controller.isCheque) return _ChequeFields(controller: controller);
-                    if (controller.hasReference) {
-                      return Padding(
-                        padding: const EdgeInsets.only(top: AppSizes.md),
-                        child: AppTextField(
+            const SectionHeader(title: 'RECEIPT OR CHEQUE PHOTO'),
+            ScanDraftStrip(
+              draft: controller.scans,
+              emptyTitle: 'Attach the receipt or cheque',
+              emptyMessage:
+                  'Photograph it so the payment is on record even if the paper '
+                  'is lost.',
+            ),
+            AppSizes.gapSm,
+
+            MoreDetails(
+              children: [
+                Obx(
+                  () => _BillField(
+                    bill: controller.againstBill.value,
+                    enabled: controller.supplier.value != null,
+                    onTap: () => _pickBill(context),
+                    onClear: () => controller.setBill(null),
+                  ),
+                ),
+                Obx(
+                  () => controller.hasReference
+                      ? AppTextField(
                           label: 'Reference number',
                           controller: controller.referenceNo,
                           textInputAction: TextInputAction.next,
                           hint: 'Bank or wallet reference',
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  }),
-                ],
-              ),
-            ),
-            AppSizes.gapMd,
-
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Obx(
-                    () => DateField(
-                      label: 'Payment date',
-                      value: controller.paymentDate.value,
-                      onChanged: controller.setDate,
-                    ),
-                  ),
-                  AppSizes.gapMd,
-                  AppTextField(
-                    label: 'Payment date (BS)',
-                    controller: controller.paymentDateBs,
-                    keyboardType: TextInputType.datetime,
-                    textInputAction: TextInputAction.next,
-                    hint: '2083-05-10',
-                  ),
-                  AppSizes.gapMd,
-                  AppTextField(
-                    label: 'Voucher number',
-                    controller: controller.voucherNo,
-                    textInputAction: TextInputAction.next,
-                    hint: 'Optional, must be unique this year',
-                  ),
-                ],
-              ),
-            ),
-            AppSizes.gapMd,
-
-            AppCard(
-              child: Column(
-                children: [
-                  AppTextField(
-                    label: 'Description',
-                    controller: controller.description,
-                    textInputAction: TextInputAction.next,
-                  ),
-                  AppSizes.gapMd,
-                  AppTextField(
-                    label: 'Remarks',
-                    controller: controller.remarks,
-                    maxLines: 3,
-                  ),
-                ],
-              ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                AppTextField(
+                  label: 'Date as written on the voucher (BS)',
+                  controller: controller.paymentDateBs,
+                  keyboardType: TextInputType.datetime,
+                  textInputAction: TextInputAction.next,
+                  hint: '2083-05-10',
+                ),
+                AppTextField(
+                  label: 'Description',
+                  controller: controller.description,
+                  textInputAction: TextInputAction.next,
+                ),
+                AppTextField(
+                  label: 'Remarks',
+                  controller: controller.remarks,
+                  maxLines: 3,
+                ),
+              ],
             ),
             AppSizes.gapLg,
           ],
@@ -192,7 +186,7 @@ class PaymentFormView extends GetView<PaymentFormController> {
       hint: 'Name or phone',
       search: controller.searchSuppliers,
       emptyTitle: 'No suppliers match',
-      emptyMessage: 'Add them under the Suppliers tab first.',
+      emptyMessage: 'Add them under the Parties tab first.',
       itemBuilder: (supplier, select) =>
           SupplierRow(supplier: supplier, onTap: select),
     );
@@ -216,76 +210,6 @@ class PaymentFormView extends GetView<PaymentFormController> {
     );
 
     if (picked != null) controller.setBill(picked);
-  }
-}
-
-/// The cheque's own number and date.
-///
-/// The date written on a cheque is the one that matters — it is when the money
-/// can actually leave — so it is captured separately from the day the cheque
-/// was handed over, and it is what the register sorts by.
-class _ChequeFields extends StatelessWidget {
-  const _ChequeFields({required this.controller});
-
-  final PaymentFormController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSizes.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppTextField(
-            label: 'Cheque number',
-            controller: controller.chequeNo,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.next,
-            validator: (value) => Validators.required(value, 'Cheque number'),
-          ),
-          AppSizes.gapMd,
-          Obx(
-            () => DateField(
-              label: 'Date on the cheque',
-              value: controller.chequeDate.value,
-              onChanged: controller.setChequeDate,
-            ),
-          ),
-          AppSizes.gapSm,
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSizes.md,
-              vertical: AppSizes.sm,
-            ),
-            decoration: BoxDecoration(
-              color: palette.pendingSoft,
-              borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  size: 17,
-                  color: palette.pending,
-                ),
-                AppSizes.gapSm,
-                Expanded(
-                  child: Text(
-                    'This reduces what you owe straight away, but stays listed '
-                    'as not cleared until the bank takes it.',
-                    style: AppTextStyles.caption.copyWith(
-                      color: palette.pending,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

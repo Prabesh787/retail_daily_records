@@ -1,6 +1,9 @@
 import { PaymentStatus, SupplierPaymentMode } from '../../database/generated/prisma/index.js';
 import {
+  serializeAccount,
+  serializeAccountEntry,
   serializeCustomer,
+  serializeCustomerPayment,
   serializeFiscalYear,
   serializePayment,
   serializePurchase,
@@ -92,6 +95,20 @@ const definitions = {
     }),
   },
 
+  accounts: {
+    label: 'Account',
+    delegate: (db) => db.account,
+    serialize: serializeAccount,
+    toData: (payload) => ({
+      name: payload.name,
+      accountType: payload.accountType,
+      accountNo: payload.accountNo,
+      openingBalance: payload.openingBalance,
+      isActive: payload.isActive,
+      remarks: payload.remarks,
+    }),
+  },
+
   purchases: {
     label: 'Purchase',
     delegate: (db) => db.purchase,
@@ -127,6 +144,9 @@ const definitions = {
       chequeDate: payload.chequeDate,
       chequeDateBs: payload.chequeDateBs,
       referenceNo: payload.referenceNo,
+      // Undefined from a build that predates accounts, which Prisma leaves
+      // untouched on update.
+      accountId: payload.accountId,
       clearedDate: payload.clearedDate,
       // Cash is money that has moved; a cheque has only been handed over. Same
       // default the REST endpoint applies, so a payment means the same thing
@@ -211,10 +231,54 @@ const definitions = {
             // CREDIT is money not received yet; everything else is in hand.
             status: payment.status ?? (payment.paymentMode === 'CREDIT' ? 'ISSUED' : 'CLEARED'),
             remarks: payment.remarks,
+            accountId: payment.accountId,
           })),
         });
       }
     },
+  },
+
+  customer_payments: {
+    label: 'Customer payment',
+    delegate: (db) => db.customerPayment,
+    serialize: serializeCustomerPayment,
+    tracksCreator: true,
+    toData: (payload) => ({
+      fiscalYearId: payload.fiscalYearId,
+      customerId: payload.customerId,
+      saleId: payload.saleId,
+      voucherNo: payload.voucherNo,
+      paymentDate: payload.paymentDate,
+      paymentDateBs: payload.paymentDateBs,
+      paymentMode: payload.paymentMode,
+      amount: payload.amount,
+      accountId: payload.accountId,
+      chequeNo: payload.chequeNo,
+      chequeDate: payload.chequeDate,
+      chequeDateBs: payload.chequeDateBs,
+      referenceNo: payload.referenceNo,
+      clearedDate: payload.clearedDate,
+      status:
+        payload.status ??
+        (payload.paymentMode === SupplierPaymentMode.CHEQUE
+          ? PaymentStatus.ISSUED
+          : PaymentStatus.CLEARED),
+      remarks: payload.remarks,
+    }),
+  },
+
+  account_entries: {
+    label: 'Account entry',
+    delegate: (db) => db.accountEntry,
+    serialize: serializeAccountEntry,
+    toData: (payload) => ({
+      entryDate: payload.entryDate,
+      entryDateBs: payload.entryDateBs,
+      fromAccountId: payload.fromAccountId,
+      toAccountId: payload.toAccountId,
+      amount: payload.amount,
+      description: payload.description,
+    }),
   },
 };
 

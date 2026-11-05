@@ -13,18 +13,27 @@ import '../controllers/suppliers_controller.dart';
 /// total, split into money already gone and cheques that have not cleared.
 /// The list underneath is that number itemised.
 class SuppliersView extends GetView<SuppliersController> {
-  const SuppliersView({super.key});
+  const SuppliersView({super.key, this.switcher});
+
+  /// The Customers / Suppliers switch, when this is showing on the Parties tab.
+  final Widget? switcher;
 
   @override
   Widget build(BuildContext context) {
     return AppScreen(
-      title: 'Suppliers',
+      title: switcher == null ? 'Suppliers' : 'Parties',
       back: false,
       padded: false,
       onRefresh: controller.reload,
-      headerExtra: SearchField(
-        hint: 'Name or phone',
-        onChanged: controller.onSearchChanged,
+      headerExtraHeight: switcher == null ? 56 : 104,
+      headerExtra: Column(
+        children: [
+          if (switcher case final top?) ...[top, AppSizes.gapSm],
+          SearchField(
+            hint: 'Name or phone',
+            onChanged: controller.onSearchChanged,
+          ),
+        ],
       ),
       floatingAction: AppFab(
         label: 'New supplier',

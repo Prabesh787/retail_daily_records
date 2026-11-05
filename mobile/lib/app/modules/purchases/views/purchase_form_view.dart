@@ -2,21 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_sizes.dart';
+import '../../../core/domain/pay_method.dart';
 import '../../../core/extensions/context_ext.dart';
-import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/domain/domain_widgets.dart';
 import '../../../core/widgets/widgets.dart';
+import '../../../data/models/ledger.dart';
 import '../../../data/models/supplier.dart';
 import '../controllers/purchase_form_controller.dart';
 
-/// The bill form.
+/// The bill form: the sale form's layout, in red.
 ///
-/// Four things are required — supplier, amount, bill number, date — and they
-/// come first, in that order, because that is the order they are read off the
-/// paper. Everything optional is below the fold.
+/// A shopkeeper who has learned one has learned both. The differences are the
+/// ones paper bills force: a bill has a number, a supplier is always known, and
+/// most arrive on credit.
 class PurchaseFormView extends GetView<PurchaseFormController> {
   const PurchaseFormView({super.key});
+
+  static const List<PayMethod> _methods = [
+    PayMethod.credit,
+    PayMethod.cash,
+    PayMethod.bank,
+    PayMethod.cheque,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +36,7 @@ class PurchaseFormView extends GetView<PurchaseFormController> {
       bottomBar: Obx(
         () => AppButton(
           label: 'Save bill',
+          color: palette.moneyOut,
           isLoading: controller.isSaving.value,
           onPressed: controller.save,
         ),
@@ -37,10 +46,61 @@ class PurchaseFormView extends GetView<PurchaseFormController> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Obx(() {
+              controller.amountRevision.value;
+              return TxnBanner(
+                kind: ActivityKind.purchase,
+                amount: controller.billAmount,
+              );
+            }),
+            AppSizes.gapMd,
+
+            Obx(
+              () => DocHeader(
+                numberLabel: 'Bill no.',
+                number: controller.billNo,
+                numberHint: '4521',
+                numberValidator: (value) =>
+                    Validators.required(value, 'Bill number'),
+                date: controller.billDate.value,
+                onDate: controller.setDate,
+              ),
+            ),
+            AppSizes.gapMd,
+
+            AppCard(
+              child: AppTextField.amount(
+                label: 'Total amount',
+                controller: controller.amount,
+                validator: Validators.amount,
+                textInputAction: TextInputAction.next,
+                onChanged: (_) => controller.amountRevision.value++,
+              ),
+            ),
+            AppSizes.gapMd,
+
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Obx(
+                    () => PayMethodSection(
+                      label: 'How was it paid?',
+                      methods: _methods,
+                      method: controller.method.value,
+                      onChanged: controller.setMethod,
+                      account: controller.account,
+                      accountLabel: 'Paid from',
+                      chequeNo: controller.chequeNo,
+                      chequeDate: controller.chequeDate.value,
+                      onChequeDate: controller.setChequeDate,
+                      chequeAccountLabel: 'Drawn on',
+                      chequeNote:
+                          'Listed under Cheques until the bank takes it, and '
+                          'taken off the balance only then.',
+                    ),
+                  ),
+                  AppSizes.gapMd,
                   Obx(
                     () => PartyField(
                       label: 'Supplier',
@@ -55,79 +115,53 @@ class PurchaseFormView extends GetView<PurchaseFormController> {
                       onTap: () => _pickSupplier(context),
                     ),
                   ),
-                  AppSizes.gapMd,
-                  AppTextField.amount(
-                    label: 'Bill amount',
-                    controller: controller.amount,
-                    validator: Validators.amount,
-                    textInputAction: TextInputAction.next,
-                  ),
-                  AppSizes.gapMd,
-                  AppTextField(
-                    label: 'Bill number',
-                    controller: controller.billNo,
-                    validator: (value) =>
-                        Validators.required(value, 'Bill number'),
-                    keyboardType: TextInputType.text,
-                    textInputAction: TextInputAction.next,
-                    hint: '4521',
-                  ),
                 ],
               ),
             ),
             AppSizes.gapMd,
 
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Obx(
-                    () => DateField(
-                      label: 'Bill date',
-                      value: controller.billDate.value,
-                      onChanged: controller.setDate,
-                    ),
-                  ),
-                  AppSizes.gapMd,
-                  AppTextField(
-                    label: 'Bill date (BS)',
-                    controller: controller.billDateBs,
-                    keyboardType: TextInputType.datetime,
-                    textInputAction: TextInputAction.next,
-                    hint: '2083-05-10',
-                  ),
-                  AppSizes.gapXs,
-                  // Filled in from the date above, and left alone once touched:
-                  // what the bill says wins over what the conversion says.
-                  Text(
-                    'Filled in from the date above. Change it if the bill says '
-                    'something different.',
-                    style: AppTextStyles.caption.copyWith(
-                      color: palette.inkSubtle,
-                    ),
-                  ),
-                ],
-              ),
+            const SectionHeader(title: 'BILL SCAN'),
+            ScanDraftStrip(
+              draft: controller.scans,
+              emptyTitle: 'Attach the paper bill',
+              emptyMessage:
+                  'Photograph it so the bill is on record even if the paper is '
+                  'lost.',
             ),
-            AppSizes.gapMd,
+            AppSizes.gapSm,
 
-            AppCard(
-              child: Column(
-                children: [
-                  AppTextField(
-                    label: 'What was bought',
-                    controller: controller.description,
-                    textInputAction: TextInputAction.next,
-                    hint: 'Cotton shirting, assorted colours',
-                  ),
-                  AppSizes.gapMd,
-                  AppTextField(
-                    label: 'Remarks',
-                    controller: controller.remarks,
-                    maxLines: 3,
-                  ),
-                ],
-              ),
+            MoreDetails(
+              children: [
+                Obx(
+                  () => controller.method.value.isCredit
+                      ? const SizedBox.shrink()
+                      : AppTextField.amount(
+                          label: 'Paid now, if only part',
+                          controller: controller.paidAmount,
+                          hint: 'Leave empty if paid in full',
+                        ),
+                ),
+                // Filled in from the date above, and left alone once touched:
+                // what the bill says wins over what the conversion says.
+                AppTextField(
+                  label: 'Date as written on the bill (BS)',
+                  controller: controller.billDateBs,
+                  keyboardType: TextInputType.datetime,
+                  textInputAction: TextInputAction.next,
+                  hint: '2083-05-10',
+                ),
+                AppTextField(
+                  label: 'What was bought',
+                  controller: controller.description,
+                  textInputAction: TextInputAction.next,
+                  hint: 'Cotton shirting, assorted colours',
+                ),
+                AppTextField(
+                  label: 'Remarks',
+                  controller: controller.remarks,
+                  maxLines: 3,
+                ),
+              ],
             ),
             AppSizes.gapLg,
           ],
@@ -152,7 +186,7 @@ class PurchaseFormView extends GetView<PurchaseFormController> {
       hint: 'Name or phone',
       search: controller.searchSuppliers,
       emptyTitle: 'No suppliers match',
-      emptyMessage: 'Add them under the Suppliers tab first.',
+      emptyMessage: 'Add them under the Parties tab first.',
       itemBuilder: (supplier, select) =>
           SupplierRow(supplier: supplier, onTap: select),
     );

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/controllers/account_choice.dart';
+import '../../../core/controllers/scan_capture.dart';
 import '../../../core/domain/money.dart';
+import '../../../core/domain/pay_method.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/nepali_date.dart';
 import '../../../core/widgets/app_toast.dart';
-import '../../../data/enums/supplier_payment_mode.dart';
+import '../../../data/enums/document_type.dart';
 import '../../../data/models/purchase.dart';
 import '../../../data/models/supplier.dart';
 import '../../../data/models/supplier_payment.dart';
@@ -41,7 +44,12 @@ class PaymentFormController extends GetxController {
 
   final Rxn<Supplier> supplier = Rxn<Supplier>();
   final Rxn<Purchase> againstBill = Rxn<Purchase>();
-  final Rx<SupplierPaymentMode> mode = SupplierPaymentMode.cash.obs;
+  final Rx<PayMethod> method = PayMethod.cash.obs;
+  final AccountChoice account = AccountChoice();
+  final ScanDraft scans = ScanDraft(paper: 'receipt');
+
+  /// Bumped as the amount is typed, so the banner keeps up with it.
+  final RxInt amountRevision = 0.obs;
   final RxInt paymentDate = AppDateUtils.startOfTodayMs().obs;
   final RxInt chequeDate = AppDateUtils.startOfTodayMs().obs;
   final RxnString supplierError = RxnString();
@@ -51,8 +59,10 @@ class PaymentFormController extends GetxController {
   /// date picker stops overwriting it — the same rule the bill form follows.
   bool _bsEdited = false;
 
-  bool get isCheque => mode.value.isCheque;
-  bool get hasReference => mode.value.hasReference;
+  bool get isCheque => method.value.isCheque;
+  bool get hasReference => method.value.paymentMode.hasReference;
+
+  Money get typedAmount => Money.tryParse(amount.text) ?? Money.zero;
 
   @override
   void onInit() {
@@ -97,6 +107,7 @@ class PaymentFormController extends GetxController {
     final due = bill?.dueTotal;
     if (due != null && due.isPositive && amount.text.trim().isEmpty) {
       amount.text = due.toWire();
+      amountRevision.value++;
     }
   }
 
@@ -111,7 +122,10 @@ class PaymentFormController extends GetxController {
 
   void setChequeDate(int ms) => chequeDate.value = ms;
 
-  void setMode(SupplierPaymentMode value) => mode.value = value;
+  void setMethod(PayMethod value) {
+    method.value = value;
+    if (value.needsAccount) account.preselectOnlyBank();
+  }
 
   void setSupplier(Supplier value) {
     supplier.value = value;
@@ -147,7 +161,8 @@ class PaymentFormController extends GetxController {
     final formValid = formKey.currentState?.validate() ?? false;
 
     if (supplier.value == null) supplierError.value = 'Choose the supplier';
-    if (!formValid || supplier.value == null) return;
+    final accountValid = !method.value.needsAccount || account.validate();
+    if (!formValid || supplier.value == null || !accountValid) return;
     if (isSaving.value) return;
 
     isSaving.value = true;
@@ -170,7 +185,8 @@ class PaymentFormController extends GetxController {
           voucherNo: _trimmed(voucherNo),
           paymentDate: paymentDate.value,
           paymentDateBs: _trimmed(paymentDateBs),
-          paymentMode: mode.value,
+          paymentMode: method.value.paymentMode,
+          accountId: method.value == PayMethod.cash ? null : account.id,
           amount: Money.tryParse(amount.text) ?? Money.zero,
           // Cheque and reference fields are cleared unless the mode uses them,
           // so switching mode after typing cannot leave a stale cheque number
@@ -184,11 +200,25 @@ class PaymentFormController extends GetxController {
         ),
       );
 
-      AppToast.success(
-        isCheque
-            ? 'Cheque ${saved.chequeNo} recorded'
-            : '${saved.amount.display()} paid',
+      final unattached = await scans.attachTo(
+        entityType: AttachmentEntityType.supplierPayment,
+        entityId: saved.id,
+        documentType: isCheque
+            ? DocumentType.chequeCopy
+            : DocumentType.supplierPaymentReceipt,
       );
+      if (unattached > 0) {
+        AppToast.error(
+          'Payment saved, but $unattached photo(s) could not be attached. '
+          'Add them again from the payment.',
+        );
+      } else {
+        AppToast.success(
+          isCheque
+              ? 'Cheque ${saved.chequeNo} recorded'
+              : '${saved.amount.display()} paid',
+        );
+      }
       Get.offNamed<void>(
         Routes.paymentDetail,
         arguments: {RouteArgs.paymentId: saved.id},

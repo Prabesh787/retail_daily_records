@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 
+import '../controllers/quick_sale_controller.dart';
 import '../controllers/sale_day_controller.dart';
 import '../controllers/sale_detail_controller.dart';
 import '../controllers/sale_form_controller.dart';
@@ -10,6 +11,13 @@ class SaleFormBinding extends Bindings {
   @override
   void dependencies() {
     Get.lazyPut<SaleFormController>(SaleFormController.new);
+  }
+}
+
+class QuickSaleBinding extends Bindings {
+  @override
+  void dependencies() {
+    Get.lazyPut<QuickSaleController>(QuickSaleController.new);
   }
 }
 

@@ -27,6 +27,9 @@ class AppFab extends StatelessWidget {
     final palette = context.palette;
 
     return FloatingActionButton.extended(
+      // The shell keeps several tabs alive at once, each with its own button,
+      // and two heroes sharing the default tag throw on the next navigation.
+      heroTag: null,
       onPressed: onPressed,
       backgroundColor: palette.brand,
       foregroundColor: Colors.white,

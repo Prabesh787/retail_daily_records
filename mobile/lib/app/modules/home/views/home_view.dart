@@ -1,49 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../accounts/views/accounts_view.dart';
+import '../../activity/views/activity_view.dart';
 import '../../dashboard/views/dashboard_view.dart';
 import '../../more/views/more_view.dart';
-import '../../purchases/views/purchases_view.dart';
-import '../../sales/views/sales_view.dart';
-import '../../suppliers/views/suppliers_view.dart';
+import '../../parties/views/parties_view.dart';
 import '../controllers/home_controller.dart';
 
-/// The five destinations, matching the web app's tab bar.
+/// The five destinations: what happened, who with, and where the money is.
 ///
-/// Five is the practical ceiling for a thumb-reachable bar; everything else —
-/// customers, the cheque register, fiscal years — lives under More rather than
-/// being squeezed in.
-///
-/// All five are real screens now; the shell does nothing but hold them and
-/// remember which one is showing.
+/// Sales and purchases share History rather than each taking a tab, which
+/// is what leaves room for Parties and Accounts. Their own lists, along with
+/// everything else that does not earn a tab, live under More.
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
 
   static const List<({IconData icon, IconData active, String label})>
       _tabs = [
     (
-      icon: Icons.dashboard_outlined,
-      active: Icons.dashboard_rounded,
+      icon: Icons.home_outlined,
+      active: Icons.home_rounded,
       label: 'Home',
     ),
     (
       icon: Icons.receipt_long_outlined,
       active: Icons.receipt_long_rounded,
-      label: 'Purchases',
+      // Short on purpose: 'Transactions' wraps onto two lines in a five-tab bar.
+      label: 'History',
     ),
     (
-      icon: Icons.point_of_sale_outlined,
-      active: Icons.point_of_sale_rounded,
-      label: 'Sales',
+      icon: Icons.people_outline_rounded,
+      active: Icons.people_rounded,
+      label: 'Parties',
     ),
     (
-      icon: Icons.storefront_outlined,
-      active: Icons.storefront_rounded,
-      label: 'Suppliers',
+      icon: Icons.account_balance_wallet_outlined,
+      active: Icons.account_balance_wallet_rounded,
+      label: 'Accounts',
     ),
     (
-      icon: Icons.more_horiz_rounded,
-      active: Icons.more_horiz_rounded,
+      icon: Icons.grid_view_outlined,
+      active: Icons.grid_view_rounded,
       label: 'More',
     ),
   ];
@@ -52,17 +50,17 @@ class HomeView extends GetView<HomeController> {
   Widget build(BuildContext context) {
     return Scaffold(
       // An IndexedStack, so a half-filtered list survives a trip to another tab
-      // and back — a search typed on Suppliers is still there after a look at
-      // the dashboard.
+      // and back — a search typed on Parties is still there after a look at
+      // the home screen.
       body: Obx(
         () => IndexedStack(
           index: controller.tabIndex.value,
-          children: [
-            const DashboardView(),
-            const PurchasesView(),
-            const SalesView(),
-            const SuppliersView(),
-            const MoreView(),
+          children: const [
+            DashboardView(),
+            ActivityView(),
+            PartiesView(),
+            AccountsView(),
+            MoreView(),
           ],
         ),
       ),
@@ -70,6 +68,8 @@ class HomeView extends GetView<HomeController> {
         () => NavigationBar(
           selectedIndex: controller.tabIndex.value,
           onDestinationSelected: controller.changeTab,
+          height: 64,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: [
             for (final tab in _tabs)
               NavigationDestination(

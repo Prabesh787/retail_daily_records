@@ -41,6 +41,18 @@ class AttachmentRepository {
     String entityId,
   ) => _dao.forEntity(type, entityId);
 
+  Future<List<GalleryScan>> gallery({
+    required AttachmentEntityType entityType,
+    String? supplierId,
+    int? fromMs,
+    int? toMs,
+  }) => _dao.gallery(
+    entityType: entityType,
+    supplierId: supplierId,
+    fromMs: fromMs,
+    toMs: toMs,
+  );
+
   /// Copies [sourcePath] in and records it against the given record.
   Future<Attachment> add({
     required AttachmentEntityType entityType,

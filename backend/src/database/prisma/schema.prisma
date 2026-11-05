@@ -63,6 +63,14 @@ enum SalePaymentMode {
 ///  ISSUED    - recorded but not yet realised (typically a future-dated cheque)
 ///  CLEARED   - money has actually moved (normal state for cash)
 ///  CANCELLED - cheque was cancelled / bounced / voided
+enum AccountType {
+  CASH
+  BANK
+  WALLET
+
+  @@map("account_type")
+}
+
 enum PaymentStatus {
   ISSUED
   CLEARED
@@ -126,6 +134,7 @@ model User {
 
   purchases        Purchase[]
   supplierPayments SupplierPayment[]
+  customerPayments CustomerPayment[]
   sales            Sale[]
   attachments      Attachment[]
 
@@ -166,6 +175,7 @@ model FiscalYear {
 
   purchases        Purchase[]
   supplierPayments SupplierPayment[]
+  customerPayments CustomerPayment[]
   sales            Sale[]
 
   @@index([isActive])
@@ -228,7 +238,8 @@ model Customer {
   deviceId      String? @map("device_id") @db.VarChar(64)
   syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
 
-  sales Sale[]
+  sales    Sale[]
+  payments CustomerPayment[]
 
   @@index([name])
   @@index([phone])
@@ -303,6 +314,11 @@ model SupplierPayment {
   /// Bank / wallet reference for BANK_TRANSFER and similar modes.
   referenceNo  String?   @map("reference_no") @db.VarChar(100)
 
+  /// The cash box, bank or wallet the money left. NULL on rows recorded before
+  /// accounts existed: cash then reads as the cash box, and anything else as
+  /// not yet assigned to a bank.
+  accountId String? @map("account_id") @db.Uuid
+
   /// NULL while status = ISSUED. Set when the money actually leaves the bank.
   clearedDate DateTime?     @map("cleared_date") @db.Date
   status      PaymentStatus @default(CLEARED)
@@ -320,6 +336,7 @@ model SupplierPayment {
   fiscalYear FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
   supplier   Supplier   @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   purchase   Purchase?  @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  account    Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
   createdBy  User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([fiscalYearId, voucherNo], map: "supplier_payments_fy_voucher_no_key")
@@ -328,10 +345,126 @@ model SupplierPayment {
   @@index([status])
   @@index([chequeDate])
   @@index([purchaseId])
+  @@index([accountId])
   @@index([fiscalYearId])
   @@index([createdById])
   @@index([updatedAt, id])
   @@map("supplier_payments")
+}
+
+/// Where the shop's money sits: the cash box, a bank account or a wallet.
+///
+/// A balance is never stored. It is the opening balance plus every cleared
+/// movement that names the account, so it cannot drift from the records.
+model Account {
+  id             String      @id @default(uuid()) @db.Uuid
+  name           String      @db.VarChar(120)
+  accountType    AccountType @default(BANK) @map("account_type")
+  accountNo      String?     @map("account_no") @db.VarChar(60)
+  openingBalance Decimal     @default(0) @map("opening_balance") @db.Decimal(14, 2)
+  isActive       Boolean     @default(true) @map("is_active")
+  remarks        String?
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// See FiscalYear for what these two are and which triggers maintain them.
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
+  supplierPayments SupplierPayment[]
+  customerPayments CustomerPayment[]
+  salePayments     SalePayment[]
+  entriesOut       AccountEntry[]    @relation("AccountEntryFrom")
+  entriesIn        AccountEntry[]    @relation("AccountEntryTo")
+
+  @@index([updatedAt, id])
+  @@map("accounts")
+}
+
+/// Money received from a customer after the sale - the "Payment In" screen.
+///
+/// The mirror of SupplierPayment, so a cheque behaves the same in both
+/// directions: recorded as ISSUED, and in the account only once CLEARED.
+model CustomerPayment {
+  id           String @id @default(uuid()) @db.Uuid
+  fiscalYearId String @map("fiscal_year_id") @db.Uuid
+  customerId   String @map("customer_id") @db.Uuid
+
+  /// Optional, as on a supplier payment: money may settle one sale or simply
+  /// come off what the customer owes overall.
+  saleId String? @map("sale_id") @db.Uuid
+
+  voucherNo     String?             @map("voucher_no") @db.VarChar(60)
+  paymentDate   DateTime            @map("payment_date") @db.Date
+  paymentDateBs String?             @map("payment_date_bs") @db.VarChar(10)
+  paymentMode   SupplierPaymentMode @map("payment_mode")
+  amount        Decimal             @db.Decimal(14, 2)
+  accountId     String?             @map("account_id") @db.Uuid
+
+  chequeNo     String?   @map("cheque_no") @db.VarChar(60)
+  chequeDate   DateTime? @map("cheque_date") @db.Date
+  chequeDateBs String?   @map("cheque_date_bs") @db.VarChar(10)
+  referenceNo  String?   @map("reference_no") @db.VarChar(100)
+
+  clearedDate DateTime?     @map("cleared_date") @db.Date
+  status      PaymentStatus @default(CLEARED)
+
+  remarks     String?
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// See FiscalYear for what these two are and which triggers maintain them.
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
+  fiscalYear FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Restrict)
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  sale       Sale?      @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  account    Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  createdBy  User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([fiscalYearId, voucherNo], map: "customer_payments_fy_voucher_no_key")
+  @@index([customerId])
+  @@index([saleId])
+  @@index([accountId])
+  @@index([paymentDate])
+  @@index([status])
+  @@index([chequeDate])
+  @@index([fiscalYearId])
+  @@index([createdById])
+  @@index([updatedAt, id])
+  @@map("customer_payments")
+}
+
+/// Money moving with no party attached: a bank deposit, a withdrawal, a
+/// transfer, an expense or a balance correction.
+///
+/// One row whichever way it goes: money in names only `toAccountId`, money out
+/// names only `fromAccountId`, and a transfer names both.
+model AccountEntry {
+  id            String   @id @default(uuid()) @db.Uuid
+  entryDate     DateTime @map("entry_date") @db.Date
+  entryDateBs   String?  @map("entry_date_bs") @db.VarChar(10)
+  fromAccountId String?  @map("from_account_id") @db.Uuid
+  toAccountId   String?  @map("to_account_id") @db.Uuid
+  amount        Decimal  @db.Decimal(14, 2)
+  description   String?  @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// See FiscalYear for what these two are and which triggers maintain them.
+  deviceId      String? @map("device_id") @db.VarChar(64)
+  syncUpdatedAt BigInt  @default(0) @map("sync_updated_at")
+
+  fromAccount Account? @relation("AccountEntryFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount   Account? @relation("AccountEntryTo", fields: [toAccountId], references: [id], onDelete: Restrict)
+
+  @@index([entryDate])
+  @@index([fromAccountId])
+  @@index([toAccountId])
+  @@index([updatedAt, id])
+  @@map("account_entries")
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +507,9 @@ model Sale {
   createdBy  User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
   items      SaleItem[]
   payments   SalePayment[]
+
+  /// Money received later against this sale specifically.
+  laterPayments CustomerPayment[]
 
   /// Invoice numbers are unique within a fiscal year. Multiple NULLs are
   /// allowed by Postgres, which is exactly what SUMMARY sales need.
@@ -430,10 +566,15 @@ model SalePayment {
   remarks     String?
   createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  /// The bank or wallet that received it. See SupplierPayment.accountId.
+  accountId String? @map("account_id") @db.Uuid
+
+  sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   @@index([saleId])
   @@index([status])
+  @@index([accountId])
   @@map("sale_payments")
 }
 

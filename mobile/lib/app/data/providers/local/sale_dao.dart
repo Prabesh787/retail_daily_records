@@ -33,7 +33,12 @@ class SaleDao {
   final Database _db;
 
   static String get _select => '''
-    SELECT s.*, c.name AS customer_name
+    SELECT s.*, c.name AS customer_name,
+      COALESCE((
+        SELECT SUM(cp.amount) FROM ${DbTables.customerPayment} cp
+        WHERE cp.sale_id = s.id AND cp.is_deleted = 0
+          AND cp.status <> 'CANCELLED'
+      ), 0) AS later_received
     FROM ${DbTables.sale} s
     LEFT JOIN ${DbTables.customer} c ON c.id = s.customer_id
   ''';
@@ -116,12 +121,13 @@ class SaleDao {
   }
 
   Future<List<SalePayment>> paymentsFor(String saleId) async {
-    final rows = await _db.query(
-      DbTables.salePayment,
-      where: 'sale_id = ?',
-      whereArgs: [saleId],
-      orderBy: 'created_at ASC',
-    );
+    final rows = await _db.rawQuery('''
+      SELECT sp.*, a.name AS account_name
+      FROM ${DbTables.salePayment} sp
+      LEFT JOIN ${DbTables.account} a ON a.id = sp.account_id
+      WHERE sp.sale_id = ?
+      ORDER BY sp.created_at ASC
+    ''', [saleId]);
     return rows.map(SalePayment.fromMap).toList();
   }
 
@@ -187,6 +193,19 @@ class SaleDao {
       count: sales.length,
       sales: sales,
     );
+  }
+
+  /// One past the highest plain number used this year. Numbers with letters in
+  /// them are left alone: they are the shop's own series, not this one.
+  Future<String> nextInvoiceNo(String fiscalYearId) async {
+    final row = (await _db.rawQuery('''
+      SELECT COALESCE(MAX(CAST(invoice_no AS INTEGER)), 0) AS highest
+      FROM ${DbTables.sale}
+      WHERE fiscal_year_id = ? AND is_deleted = 0
+        AND invoice_no IS NOT NULL AND invoice_no NOT GLOB '*[^0-9]*'
+    ''', [fiscalYearId])).first;
+
+    return '${((row['highest'] as int?) ?? 0) + 1}';
   }
 
   Future<({Money total, int count})> totalBetween(int fromMs, int toMs) async {

@@ -31,6 +31,68 @@ class AttachmentDao {
     return rows.map(Attachment.fromMap).toList();
   }
 
+  /// The scans of one kind of record, supplier by supplier and newest first
+  /// within each. A scan whose record has been deleted is left out, because its
+  /// bill or payment is no longer part of the books.
+  Future<List<GalleryScan>> gallery({
+    required AttachmentEntityType entityType,
+    String? supplierId,
+    int? fromMs,
+    int? toMs,
+  }) async {
+    final (:table, :date, :reference) = switch (entityType) {
+      AttachmentEntityType.purchase => (
+        table: DbTables.purchase,
+        date: 'p.bill_date',
+        reference: 'p.bill_no',
+      ),
+      AttachmentEntityType.supplierPayment => (
+        table: DbTables.supplierPayment,
+        date: 'p.payment_date',
+        reference:
+            "COALESCE(NULLIF(p.voucher_no, ''), NULLIF(p.cheque_no, ''))",
+      ),
+      AttachmentEntityType.sale => throw ArgumentError(
+        'A sale has no supplier to file its scans under',
+      ),
+    };
+
+    final where = <String>[
+      'a.entity_type = ?',
+      'a.is_deleted = 0',
+      'p.is_deleted = 0',
+    ];
+    final args = <Object?>[entityType.value];
+
+    if (supplierId != null) {
+      where.add('p.supplier_id = ?');
+      args.add(supplierId);
+    }
+    if (fromMs != null) {
+      where.add('$date >= ?');
+      args.add(fromMs);
+    }
+    if (toMs != null) {
+      where.add('$date <= ?');
+      args.add(toMs);
+    }
+
+    final rows = await _db.rawQuery('''
+      SELECT a.*,
+        p.supplier_id AS supplier_id,
+        s.name AS supplier_name,
+        $date AS record_date,
+        $reference AS reference
+      FROM ${DbTables.attachment} a
+      JOIN $table p ON p.id = a.entity_id
+      LEFT JOIN ${DbTables.supplier} s ON s.id = p.supplier_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY s.name COLLATE NOCASE ASC, p.supplier_id ASC,
+        record_date DESC, a.created_at DESC
+    ''', args);
+    return rows.map(GalleryScan.fromMap).toList();
+  }
+
   Future<Attachment?> byId(String id) async {
     final rows = await _db.query(
       DbTables.attachment,

@@ -2,10 +2,13 @@ import 'package:get/get.dart';
 
 import '../../../core/constants/db_constants.dart';
 import '../../../core/controllers/loader_controller.dart';
+import '../../../data/models/ledger.dart';
 import '../../../data/repositories/dashboard_repository.dart';
 import '../../../routes/app_pages.dart';
 import '../../../services/auth_service.dart';
+import '../../activity/controllers/activity_controller.dart';
 import '../../home/controllers/home_controller.dart';
+import '../../parties/controllers/parties_controller.dart';
 
 /// The home screen.
 ///
@@ -22,6 +25,10 @@ class DashboardController extends LoaderController<DashboardData> {
     DbTables.purchase,
     DbTables.supplier,
     DbTables.supplierPayment,
+    DbTables.customerPayment,
+    DbTables.customer,
+    DbTables.account,
+    DbTables.accountEntry,
   ];
 
   DashboardData? get board => data.value;
@@ -29,45 +36,39 @@ class DashboardController extends LoaderController<DashboardData> {
   @override
   Future<DashboardData> fetch() => _dashboard.load();
 
-  /// "Good morning" and the like. Small thing, and the reason it is here rather
-  /// than in the view is that a widget rebuilding at 11:59 should not change
-  /// its greeting mid-scroll.
-  String get greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
   String get shopName => AuthService.to.shopName;
 
   // Tapping a figure goes to the screen that shows the rows behind it. That is
   // the point of the dashboard: every number on it is checkable.
-  void openSales() => _switchTab(2);
-  void openSuppliers() => _switchTab(3);
-  void openPurchases() => _switchTab(1);
+  void openTransactions() => _switchTab(HomeController.transactionsTab);
+  void openAccounts() => _switchTab(HomeController.accountsTab);
+
+  void openCustomers() => _openParties(PartyTab.customers);
+  void openSuppliers() => _openParties(PartyTab.suppliers);
+
+  void _openParties(PartyTab tab) {
+    if (Get.isRegistered<PartiesController>()) {
+      Get.find<PartiesController>().setTab(tab);
+    }
+    _switchTab(HomeController.partiesTab);
+  }
 
   void openToday() => Get.toNamed<void>(Routes.saleDay);
   void openCheques() => Get.toNamed<void>(Routes.cheques);
 
-  void openSupplier(String id) => Get.toNamed<void>(
-    Routes.supplierDetail,
-    arguments: {RouteArgs.supplierId: id},
-  );
+  void open(ActivityItem item) {
+    if (Get.isRegistered<ActivityController>()) {
+      Get.find<ActivityController>().open(item);
+    }
+  }
 
-  void openSale(String id) => Get.toNamed<void>(
-    Routes.saleDetail,
-    arguments: {RouteArgs.saleId: id},
-  );
-
-  void openBill(String id) => Get.toNamed<void>(
-    Routes.purchaseDetail,
-    arguments: {RouteArgs.purchaseId: id},
-  );
-
+  void newQuickSale() => Get.toNamed<void>(Routes.quickSale);
   void newSale() => Get.toNamed<void>(Routes.saleForm);
   void newPurchase() => Get.toNamed<void>(Routes.purchaseForm);
-  void newPayment() => Get.toNamed<void>(Routes.paymentForm);
+  void newPaymentIn() => Get.toNamed<void>(Routes.receiptForm);
+  void newPaymentOut() => Get.toNamed<void>(Routes.paymentForm);
+  void newCustomer() => Get.toNamed<void>(Routes.customerForm);
+  void newSupplier() => Get.toNamed<void>(Routes.supplierForm);
 
   /// The lists live in the shell's tabs, so "see all" switches tab rather than
   /// pushing a second copy of a screen the user can already reach with a thumb.

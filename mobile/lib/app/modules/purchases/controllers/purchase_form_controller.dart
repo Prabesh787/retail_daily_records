@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/controllers/account_choice.dart';
+import '../../../core/controllers/scan_capture.dart';
 import '../../../core/domain/money.dart';
+import '../../../core/domain/pay_method.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/nepali_date.dart';
 import '../../../core/widgets/app_toast.dart';
+import '../../../data/enums/document_type.dart';
 import '../../../data/models/purchase.dart';
 import '../../../data/models/supplier.dart';
+import '../../../data/models/supplier_payment.dart';
 import '../../../data/repositories/fiscal_year_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/supplier_payment_repository.dart';
 import '../../../data/repositories/supplier_repository.dart';
 import '../../../routes/app_pages.dart';
 
@@ -22,6 +28,8 @@ class PurchaseFormController extends GetxController {
   final PurchaseRepository _purchases = Get.find<PurchaseRepository>();
   final SupplierRepository _suppliers = Get.find<SupplierRepository>();
   final FiscalYearRepository _years = Get.find<FiscalYearRepository>();
+  final SupplierPaymentRepository _payments =
+      Get.find<SupplierPaymentRepository>();
 
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
@@ -30,6 +38,17 @@ class PurchaseFormController extends GetxController {
   final TextEditingController description = TextEditingController();
   final TextEditingController remarks = TextEditingController();
   final TextEditingController billDateBs = TextEditingController();
+  final TextEditingController paidAmount = TextEditingController();
+  final TextEditingController chequeNo = TextEditingController();
+
+  /// Bumped as the amount fields are typed in, so the banner keeps up with them.
+  final RxInt amountRevision = 0.obs;
+
+  /// Most bills arrive on credit, so that is where the choice starts.
+  final Rx<PayMethod> method = PayMethod.credit.obs;
+  final AccountChoice account = AccountChoice();
+  final ScanDraft scans = ScanDraft(paper: 'bill');
+  final RxInt chequeDate = AppDateUtils.startOfTodayMs().obs;
 
   final Rxn<Supplier> supplier = Rxn<Supplier>();
   final RxInt billDate = AppDateUtils.startOfTodayMs().obs;
@@ -69,6 +88,21 @@ class PurchaseFormController extends GetxController {
     supplier.value = await _suppliers.byId(supplierId);
   }
 
+  Money get billAmount => Money.tryParse(amount.text) ?? Money.zero;
+
+  /// What is being paid now. Empty means the whole bill, as it does on a sale.
+  Money get paidNow {
+    if (method.value.isCredit) return Money.zero;
+    return Money.tryParse(paidAmount.text) ?? billAmount;
+  }
+
+  void setMethod(PayMethod value) {
+    method.value = value;
+    if (value.needsAccount) account.preselectOnlyBank();
+  }
+
+  void setChequeDate(int ms) => chequeDate.value = ms;
+
   void setDate(int ms) {
     billDate.value = ms;
     _syncBsFromDate();
@@ -91,7 +125,8 @@ class PurchaseFormController extends GetxController {
     if (supplier.value == null) {
       supplierError.value = 'Choose the supplier';
     }
-    if (!formValid || supplier.value == null) return;
+    final accountValid = !method.value.needsAccount || account.validate();
+    if (!formValid || supplier.value == null || !accountValid) return;
     if (isSaving.value) return;
 
     isSaving.value = true;
@@ -121,7 +156,48 @@ class PurchaseFormController extends GetxController {
         ),
       );
 
-      AppToast.success('Bill ${saved.billNo} recorded');
+      // Filed against the bill, so the bill itself reads as paid. A failure here
+      // leaves a correct unpaid bill behind, and says so rather than losing it.
+      final paid = paidNow;
+      if (paid.isPositive) {
+        try {
+          await _payments.save(
+            SupplierPayment(
+              id: '',
+              createdAt: 0,
+              updatedAt: 0,
+              fiscalYearId: year.id,
+              supplierId: saved.supplierId,
+              purchaseId: saved.id,
+              paymentDate: billDate.value,
+              paymentDateBs: _trimmed(billDateBs),
+              paymentMode: method.value.paymentMode,
+              amount: paid,
+              accountId: method.value == PayMethod.cash ? null : account.id,
+              chequeNo: method.value.isCheque ? _trimmed(chequeNo) : null,
+              chequeDate: method.value.isCheque ? chequeDate.value : null,
+            ),
+          );
+        } on Exception catch (e) {
+          AppToast.error(
+            'Bill saved, but the payment was not: $e. Record it from the bill.',
+          );
+        }
+      }
+
+      final unattached = await scans.attachTo(
+        entityType: AttachmentEntityType.purchase,
+        entityId: saved.id,
+        documentType: DocumentType.purchaseBill,
+      );
+      if (unattached > 0) {
+        AppToast.error(
+          'Bill saved, but $unattached photo(s) could not be attached. '
+          'Add them again from the bill.',
+        );
+      } else {
+        AppToast.success('Bill ${saved.billNo} recorded');
+      }
       // Replaces the form in the stack, so backing out of the bill you just
       // saved does not land on a filled-in form inviting a duplicate.
       Get.offNamed<void>(
@@ -150,6 +226,8 @@ class PurchaseFormController extends GetxController {
       description,
       remarks,
       billDateBs,
+      paidAmount,
+      chequeNo,
     ]) {
       field.dispose();
     }

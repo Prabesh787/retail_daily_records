@@ -6,16 +6,21 @@ import '../../../core/extensions/context_ext.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/domain/domain_widgets.dart';
 import '../../../core/widgets/widgets.dart';
-import '../../../data/models/supplier_payment.dart';
+import '../../../data/models/ledger.dart';
 import '../controllers/cheque_register_controller.dart';
 
-/// The cheque register.
+/// The cheque register, both ways.
 ///
-/// Every row here is money already counted against a supplier's balance but
-/// still sitting in the account. Overdue and due-this-week are split out
-/// because those are the two buckets that need doing something about today.
+/// Overdue and due-this-week are split out because those are the two buckets
+/// that need doing something about today.
 class ChequeRegisterView extends GetView<ChequeRegisterController> {
   const ChequeRegisterView({super.key});
+
+  static const List<Segment<ChequeDirection?>> _directions = [
+    Segment(value: null, label: 'All'),
+    Segment(value: ChequeDirection.toCollect, label: 'To collect'),
+    Segment(value: ChequeDirection.toPay, label: 'To pay'),
+  ];
 
   static const List<Segment<bool>> _filters = [
     Segment(value: true, label: 'Not cleared'),
@@ -25,7 +30,7 @@ class ChequeRegisterView extends GetView<ChequeRegisterController> {
   @override
   Widget build(BuildContext context) {
     return AppScreen(
-      title: 'Cheque register',
+      title: 'Cheques',
       back: true,
       onRefresh: controller.reload,
       child: Obx(() {
@@ -41,6 +46,32 @@ class ChequeRegisterView extends GetView<ChequeRegisterController> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: StatTile(
+                    label: 'TO COLLECT',
+                    value: controller.toCollect.display(decimals: false),
+                    tone: MoneyTone.inbound,
+                  ),
+                ),
+                AppSizes.gapSm,
+                Expanded(
+                  child: StatTile(
+                    label: 'TO PAY',
+                    value: controller.toPay.display(decimals: false),
+                    tone: MoneyTone.outbound,
+                  ),
+                ),
+              ],
+            ),
+            AppSizes.gapMd,
+            SegmentedControl<ChequeDirection?>(
+              segments: _directions,
+              value: controller.direction.value,
+              onChanged: controller.setDirection,
+            ),
+            AppSizes.gapSm,
             SegmentedControl<bool>(
               segments: _filters,
               value: controller.onlyPending.value,
@@ -55,45 +86,18 @@ class ChequeRegisterView extends GetView<ChequeRegisterController> {
                     ? 'Nothing outstanding'
                     : 'No cheques recorded',
                 message: controller.onlyPending.value
-                    ? 'Every cheque you have written has cleared the bank.'
-                    : 'Cheques written to suppliers will be listed here.',
+                    ? 'Every cheque has cleared.'
+                    : 'Cheques you receive or write will be listed here.',
               )
             else ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: StatTile(
-                      icon: Icons.schedule_rounded,
-                      label: 'DUE WITHIN 7 DAYS',
-                      value: controller.dueThisWeek.display(decimals: false),
-                      foot:
-                          '${split.overdue.length + split.week.length} to cover',
-                      tone: MoneyTone.pending,
-                    ),
-                  ),
-                  AppSizes.gapMd,
-                  Expanded(
-                    child: StatTile(
-                      icon: Icons.account_balance_outlined,
-                      label: 'TOTAL LISTED',
-                      value: controller.total.display(decimals: false),
-                      foot: '${controller.rows.length} cheques',
-                    ),
-                  ),
-                ],
-              ),
-              AppSizes.gapLg,
-
               _Bucket(
                 label: 'Overdue',
-                hint: 'Past the date on the cheque and still not cleared.',
                 rows: split.overdue,
                 controller: controller,
                 tone: MoneyTone.outbound,
               ),
               _Bucket(
                 label: 'Next 7 days',
-                hint: 'Make sure the money is in the account.',
                 rows: split.week,
                 controller: controller,
                 tone: MoneyTone.pending,
@@ -101,6 +105,11 @@ class ChequeRegisterView extends GetView<ChequeRegisterController> {
               _Bucket(
                 label: 'Later',
                 rows: split.later,
+                controller: controller,
+              ),
+              _Bucket(
+                label: 'Cleared or cancelled',
+                rows: split.settled,
                 controller: controller,
               ),
             ],
@@ -119,13 +128,11 @@ class _Bucket extends StatelessWidget {
     required this.label,
     required this.rows,
     required this.controller,
-    this.hint,
     this.tone = MoneyTone.plain,
   });
 
   final String label;
-  final String? hint;
-  final List<SupplierPayment> rows;
+  final List<ChequeItem> rows;
   final ChequeRegisterController controller;
   final MoneyTone tone;
 
@@ -140,30 +147,14 @@ class _Bucket extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${label.toUpperCase()} (${rows.length})',
-                  style: AppTextStyles.label.copyWith(
-                    color: tone == MoneyTone.plain
-                        ? palette.inkSubtle
-                        : tone.ink(palette),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (hint != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSizes.xs),
-              child: Text(
-                hint!,
-                style: AppTextStyles.caption.copyWith(
-                  color: palette.inkSubtle,
-                ),
-              ),
+          Text(
+            '${label.toUpperCase()} (${rows.length})',
+            style: AppTextStyles.label.copyWith(
+              color: tone == MoneyTone.plain
+                  ? palette.inkSubtle
+                  : tone.ink(palette),
             ),
+          ),
           AppSizes.gapXs,
           AppCard.flush(
             child: Column(
@@ -171,8 +162,8 @@ class _Bucket extends StatelessWidget {
                 for (var i = 0; i < rows.length; i++) ...[
                   if (i > 0) const RowDivider(),
                   ChequeRow(
-                    payment: rows[i],
-                    onTap: () => controller.openPayment(rows[i]),
+                    cheque: rows[i],
+                    onTap: () => _actions(context, rows[i]),
                   ),
                 ],
               ],
@@ -182,4 +173,40 @@ class _Bucket extends StatelessWidget {
       ),
     );
   }
+
+  /// A pending cheque has something to do; a settled one is just a record.
+  Future<void> _actions(BuildContext context, ChequeItem cheque) async {
+    if (!cheque.isPending) {
+      controller.open(cheque);
+      return;
+    }
+
+    final toCollect = cheque.direction == ChequeDirection.toCollect;
+    final action = await AppSheet.options<_Action>(
+      context: context,
+      title: 'Cheque ${cheque.chequeNo ?? ''}'.trim(),
+      options: [
+        const SheetOption(value: _Action.clear, label: 'Mark as cleared'),
+        SheetOption(
+          value: _Action.bounce,
+          label: toCollect ? 'It bounced' : 'Cancel cheque',
+        ),
+        const SheetOption(value: _Action.open, label: 'View details'),
+      ],
+    );
+    if (!context.mounted) return;
+
+    switch (action) {
+      case _Action.clear:
+        await controller.clear(context, cheque);
+      case _Action.bounce:
+        await controller.bounce(cheque);
+      case _Action.open:
+        controller.open(cheque);
+      case null:
+        break;
+    }
+  }
 }
+
+enum _Action { clear, bounce, open }
