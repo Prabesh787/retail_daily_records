@@ -70,6 +70,16 @@ class SaleDetailView extends GetView<SaleDetailController> {
         _TotalCard(sale: sale),
         AppSizes.gapMd,
 
+        if (controller.canReceive) ...[
+          AppButton(
+            label: 'Receive payment',
+            icon: Icons.south_west_rounded,
+            color: context.palette.moneyIn,
+            onPressed: controller.receivePayment,
+          ),
+          AppSizes.gapMd,
+        ],
+
         AppCard.flush(
           child: AppListRow(
             leading: IconPlate(
@@ -290,6 +300,18 @@ class _SettlementRow extends StatelessWidget {
 
   final SalePayment payment;
 
+  /// The cheque or reference, and which account it went to, as far as known.
+  String? get _detail {
+    final parts = [
+      if (payment.chequeNo != null)
+        'Cheque ${payment.chequeNo}'
+      else if (payment.referenceNo != null)
+        'Ref ${payment.referenceNo}',
+      ?payment.accountName,
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -320,11 +342,9 @@ class _SettlementRow extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (payment.chequeNo != null || payment.referenceNo != null)
+                if (_detail case final detail?)
                   Text(
-                    payment.chequeNo != null
-                        ? 'Cheque ${payment.chequeNo}'
-                        : 'Ref ${payment.referenceNo}',
+                    detail,
                     style: AppTextStyles.caption.copyWith(
                       color: palette.inkMuted,
                     ),

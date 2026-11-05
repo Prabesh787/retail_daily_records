@@ -22,7 +22,11 @@ class CustomersController extends LoaderController<List<Customer>> {
   /// are derived from them, so a sale recorded elsewhere changes this list even
   /// though no customer row moved.
   @override
-  List<String> get watches => const [DbTables.customer, DbTables.sale];
+  List<String> get watches => const [
+    DbTables.customer,
+    DbTables.sale,
+    DbTables.customerPayment,
+  ];
 
   List<Customer> get rows => data.value ?? const [];
 
@@ -32,6 +36,11 @@ class CustomersController extends LoaderController<List<Customer>> {
   bool get isSearching => search.value.trim().isNotEmpty;
 
   Money get total => Money.sum(rows.map((c) => c.saleTotal ?? Money.zero));
+
+  /// Only those who owe: one customer in credit must not hide what another owes.
+  Money get toReceive => Money.sum(
+    rows.map((c) => c.receivable ?? Money.zero).where((owed) => owed.isPositive),
+  );
 
   @override
   void onInit() {

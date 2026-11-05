@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/db_constants.dart';
@@ -9,6 +10,7 @@ import '../../../data/enums/payment_status.dart';
 import '../../../data/models/supplier_payment.dart';
 import '../../../data/repositories/supplier_payment_repository.dart';
 import '../../../routes/app_pages.dart';
+import '../views/clear_cheque_sheet.dart';
 
 /// One payment, and the two things that can still happen to it.
 class PaymentDetailController extends LoaderController<SupplierPayment> {
@@ -51,23 +53,29 @@ class PaymentDetailController extends LoaderController<SupplierPayment> {
   }
 
   /// The bank took it. Nothing about what the supplier is owed changes — an
-  /// issued cheque already counted against the balance — so this moves the
-  /// money from "promised" to "gone" and nothing else.
-  Future<void> clear() async {
+  /// issued cheque already counted against the balance — but this is the moment
+  /// the money leaves an account, which is why clearing names the account.
+  Future<void> clear(BuildContext context) async {
     final current = payment;
     if (current == null || isActing.value) return;
 
-    final confirmed = await ConfirmDialog.show(
-      title: 'Mark cheque ${current.chequeNo} as cleared?',
-      message: 'Use this once the bank has actually taken the money. What you '
-          'owe this supplier does not change — it already counted.',
-      confirmLabel: 'Mark cleared',
+    final choice = await showClearChequeSheet(
+      context,
+      title: 'Cheque ${current.chequeNo} cleared',
+      accountLabel: 'Paid from',
+      earliestMs: current.paymentDate,
+      suggestedMs: current.chequeDate ?? current.paymentDate,
+      presetAccountId: current.accountId,
     );
-    if (!confirmed) return;
+    if (choice == null) return;
 
     isActing.value = true;
     try {
-      await _payments.markCleared(paymentId);
+      await _payments.markCleared(
+        paymentId,
+        clearedOnMs: choice.clearedOnMs,
+        accountId: choice.account.id,
+      );
       AppToast.success('Marked as cleared');
     } catch (e) {
       AppToast.error('Could not update this payment. $e');

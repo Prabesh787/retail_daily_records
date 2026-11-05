@@ -28,10 +28,17 @@ abstract class Routes {
   static const String saleForm = '/sales/form';
   static const String saleDetail = '/sales/detail';
   static const String saleDay = '/sales/day';
+  static const String quickSale = '/sales/quick';
 
   static const String cheques = '/cheques';
   static const String paymentForm = '/payments/form';
   static const String paymentDetail = '/payments/detail';
+  static const String receiptForm = '/receipts/form';
+  static const String receiptDetail = '/receipts/detail';
+
+  static const String accountForm = '/accounts/form';
+  static const String accountDetail = '/accounts/detail';
+  static const String accountEntry = '/accounts/entry';
 
   static const String settings = '/settings';
   static const String fiscalYears = '/fiscal-years';
@@ -49,6 +56,10 @@ abstract class RouteArgs {
   static const String purchaseId = 'purchase_id';
   static const String saleId = 'sale_id';
   static const String paymentId = 'payment_id';
+  static const String accountId = 'account_id';
+
+  /// A movement to open [Routes.accountEntry] already set to, by name.
+  static const String entryType = 'entry_type';
   static const String fiscalYearId = 'fiscal_year_id';
 
   /// A day, as epoch millis at UTC midnight - the day book's argument.
@@ -64,4 +75,5 @@ abstract class RouteArgs {
   static const String presetSupplierId = 'preset_supplier_id';
   static const String presetCustomerId = 'preset_customer_id';
   static const String presetPurchaseId = 'preset_purchase_id';
+  static const String presetSaleId = 'preset_sale_id';
 }

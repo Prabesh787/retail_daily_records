@@ -1,5 +1,9 @@
 import 'package:get/get.dart';
 
+import '../modules/accounts/bindings/accounts_binding.dart';
+import '../modules/accounts/views/account_detail_view.dart';
+import '../modules/accounts/views/account_entry_view.dart';
+import '../modules/accounts/views/account_form_view.dart';
 import '../modules/auth/bindings/auth_binding.dart';
 import '../modules/auth/views/login_view.dart';
 import '../modules/customers/bindings/customers_binding.dart';
@@ -11,13 +15,18 @@ import '../modules/payments/bindings/payments_binding.dart';
 import '../modules/payments/views/cheque_register_view.dart';
 import '../modules/payments/views/payment_detail_view.dart';
 import '../modules/payments/views/payment_form_view.dart';
+import '../modules/payments/views/receipt_detail_view.dart';
+import '../modules/payments/views/receipt_form_view.dart';
 import '../modules/purchases/bindings/purchases_binding.dart';
 import '../modules/purchases/views/purchase_detail_view.dart';
 import '../modules/purchases/views/purchase_form_view.dart';
+import '../modules/purchases/views/purchases_view.dart';
 import '../modules/sales/bindings/sales_binding.dart';
 import '../modules/sales/views/sale_day_view.dart';
 import '../modules/sales/views/sale_detail_view.dart';
+import '../modules/sales/views/quick_sale_view.dart';
 import '../modules/sales/views/sale_form_view.dart';
+import '../modules/sales/views/sales_view.dart';
 import '../modules/settings/bindings/settings_binding.dart';
 import '../modules/settings/views/fiscal_years_view.dart';
 import '../modules/settings/views/shop_view.dart';
@@ -143,6 +152,59 @@ class AppPages {
       name: Routes.saleDay,
       page: () => const SaleDayView(),
       binding: SaleDayBinding(),
+      middlewares: _protected,
+    ),
+
+    GetPage(
+      name: Routes.quickSale,
+      page: () => const QuickSaleView(),
+      binding: QuickSaleBinding(),
+      middlewares: _protected,
+    ),
+    // The two document lists, reached from More. Their controllers belong to
+    // `HomeBinding`, which is always alive underneath a pushed route.
+    GetPage(
+      name: Routes.sales,
+      page: () => const SalesView(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.purchases,
+      page: () => const PurchasesView(),
+      middlewares: _protected,
+    ),
+
+    // Payment In: the mirror of the payment screens above.
+    GetPage(
+      name: Routes.receiptForm,
+      page: () => const ReceiptFormView(),
+      binding: ReceiptFormBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.receiptDetail,
+      page: () => const ReceiptDetailView(),
+      binding: ReceiptDetailBinding(),
+      middlewares: _protected,
+    ),
+
+    // Accounts. The list is a shell tab; these are what it opens.
+    GetPage(
+      name: Routes.accountForm,
+      page: () => const AccountFormView(),
+      binding: AccountFormBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.accountDetail,
+      page: () => const AccountDetailView(),
+      binding: AccountDetailBinding(),
+      middlewares: _protected,
+    ),
+    GetPage(
+      name: Routes.accountEntry,
+      page: () => const AccountEntryView(),
+      binding: AccountEntryBinding(),
       middlewares: _protected,
     ),
 

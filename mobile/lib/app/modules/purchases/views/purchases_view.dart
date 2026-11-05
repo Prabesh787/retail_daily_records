@@ -24,6 +24,7 @@ class PurchasesView extends GetView<PurchasesController> {
   Widget build(BuildContext context) {
     return AppScreen(
       title: 'Purchases',
+      back: true,
       padded: false,
       onRefresh: controller.reload,
       headerExtra: SearchField(

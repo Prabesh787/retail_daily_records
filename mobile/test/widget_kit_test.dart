@@ -7,7 +7,7 @@ import 'package:billrecord/app/data/enums/domain_tone.dart';
 import 'package:billrecord/app/data/enums/payment_status.dart';
 import 'package:billrecord/app/data/enums/supplier_payment_mode.dart';
 import 'package:billrecord/app/data/models/supplier.dart';
-import 'package:billrecord/app/data/models/supplier_payment.dart';
+import 'package:billrecord/app/data/models/ledger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -57,20 +57,18 @@ void main() {
     );
   }
 
-  SupplierPayment cheque({required int? chequeDate, String no = '000123'}) =>
-      SupplierPayment(
-        id: 'pay-1',
-        fiscalYearId: 'fy-1',
-        supplierId: 'sup-1',
-        paymentDate: daysFromNow(0),
-        paymentMode: SupplierPaymentMode.cheque,
+  ChequeItem cheque({required int chequeDate, String no = '000123'}) =>
+      ChequeItem(
+        source: ChequeSource.supplierPayment,
+        id: 'c1',
+        parentId: 'c1',
+        direction: ChequeDirection.toPay,
         amount: Money.fromRupees(5000),
-        chequeNo: no,
-        chequeDate: chequeDate,
+        dueMs: chequeDate,
+        issuedMs: chequeDate,
         status: PaymentStatus.issued,
-        supplierName: 'Gorkha Traders',
-        createdAt: 0,
-        updatedAt: 0,
+        partyName: 'Everest',
+        chequeNo: no,
       );
 
   group('AppListRow', () {
@@ -207,22 +205,21 @@ void main() {
 
   group('ChequeRow', () {
     testWidgets('counts down to the date the cheque falls due', (tester) async {
-      await pumpKit(tester, ChequeRow(payment: cheque(chequeDate: daysFromNow(3))));
+      await pumpKit(tester, ChequeRow(cheque: cheque(chequeDate: daysFromNow(3))));
       expect(find.text('in 3d'), findsOneWidget);
 
-      await pumpKit(tester, ChequeRow(payment: cheque(chequeDate: daysFromNow(0))));
+      await pumpKit(tester, ChequeRow(cheque: cheque(chequeDate: daysFromNow(0))));
       expect(find.text('due today'), findsOneWidget);
 
       // The register's whole job is flagging these before the bank does.
-      await pumpKit(tester, ChequeRow(payment: cheque(chequeDate: daysFromNow(-2))));
+      await pumpKit(tester, ChequeRow(cheque: cheque(chequeDate: daysFromNow(-2))));
       expect(find.text('2d overdue'), findsOneWidget);
     });
 
-    testWidgets('renders an undated cheque without a countdown', (tester) async {
-      await pumpKit(tester, ChequeRow(payment: cheque(chequeDate: null)));
+    testWidgets('names the cheque number on the second line', (tester) async {
+      await pumpKit(tester, ChequeRow(cheque: cheque(chequeDate: daysFromNow(3))));
 
-      expect(find.text('No. 000123'), findsOneWidget);
-      expect(find.textContaining('overdue'), findsNothing);
+      expect(find.textContaining('No. 000123'), findsOneWidget);
     });
   });
 

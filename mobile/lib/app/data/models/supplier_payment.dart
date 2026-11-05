@@ -47,6 +47,8 @@ class SupplierPayment extends SyncableModel {
     super.deviceId,
     this.supplierName,
     this.purchaseBillNo,
+    this.accountId,
+    this.accountName,
   });
 
   final String fiscalYearId;
@@ -71,6 +73,13 @@ class SupplierPayment extends SyncableModel {
 
   /// Bank or wallet reference, for transfers.
   final String? referenceNo;
+
+  /// The cash box, bank or wallet the money left. Null on rows recorded before
+  /// accounts existed.
+  final String? accountId;
+
+  /// Joined in for display; not a stored column.
+  final String? accountName;
 
   /// Null while the status is `ISSUED`. Set when the money actually leaves.
   final int? clearedDate;
@@ -115,6 +124,7 @@ class SupplierPayment extends SyncableModel {
         'cheque_date': chequeDate,
         'cheque_date_bs': chequeDateBs,
         'reference_no': referenceNo,
+        'account_id': accountId,
         'cleared_date': clearedDate,
         'status': status.value,
         'description': description,
@@ -137,6 +147,7 @@ class SupplierPayment extends SyncableModel {
         'chequeDate': _isoOrNull(chequeDate),
         'chequeDateBs': chequeDateBs,
         'referenceNo': referenceNo,
+        'accountId': accountId,
         'clearedDate': _isoOrNull(clearedDate),
         'status': status.value,
         'description': description,
@@ -175,6 +186,8 @@ class SupplierPayment extends SyncableModel {
         createdById: map['created_by'] as String?,
         supplierName: map['supplier_name'] as String?,
         purchaseBillNo: map['purchase_bill_no'] as String?,
+        accountId: map['account_id'] as String?,
+        accountName: map['account_name'] as String?,
       );
 
   SupplierPayment copyWith({
@@ -201,6 +214,7 @@ class SupplierPayment extends SyncableModel {
     String? deviceId,
     String? supplierName,
     String? purchaseBillNo,
+    String? accountId,
     bool clearClearedDate = false,
   }) =>
       SupplierPayment(
@@ -233,6 +247,8 @@ class SupplierPayment extends SyncableModel {
         deviceId: deviceId ?? this.deviceId,
         supplierName: supplierName ?? this.supplierName,
         purchaseBillNo: purchaseBillNo ?? this.purchaseBillNo,
+        accountId: accountId ?? this.accountId,
+        accountName: accountName,
       );
 
   static const String createTableSql = '''
@@ -250,6 +266,7 @@ class SupplierPayment extends SyncableModel {
       cheque_date     INTEGER,
       cheque_date_bs  TEXT,
       reference_no    TEXT,
+      account_id      TEXT,
       cleared_date    INTEGER,
       status          TEXT NOT NULL DEFAULT 'CLEARED',
       description     TEXT,
@@ -258,6 +275,9 @@ class SupplierPayment extends SyncableModel {
       ${SyncColumns.definition}
     )
   ''';
+
+  static const String addAccountIdSql =
+      'ALTER TABLE ${DbTables.supplierPayment} ADD COLUMN account_id TEXT';
 
   /// Mirrors `supplier_payments_fy_voucher_no_key`. Partial on `voucher_no IS
   /// NOT NULL`, because most payments have no voucher number and any number of

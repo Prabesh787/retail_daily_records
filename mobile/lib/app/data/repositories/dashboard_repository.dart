@@ -2,10 +2,12 @@ import '../../core/constants/db_constants.dart';
 import '../../core/domain/money.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/domain/trend_point.dart';
+import '../models/ledger.dart';
 import '../models/purchase.dart';
 import '../models/sale.dart';
 import '../models/supplier.dart';
 import '../models/supplier_payment.dart';
+import 'account_repository.dart';
 import 'base_repository.dart';
 
 /// The dashboard's single read.
@@ -43,6 +45,11 @@ class DashboardRepository extends BaseRepository {
     );
     final latestSales = await dbService.sales.all(limit: 3);
     final latestBills = await dbService.purchases.all(limit: 3);
+    final receivable = await dbService.customers.receivable();
+    final flow = await dbService.accounts.flowBetween(todayStart, todayEnd);
+    final money = await AccountRepository().overview();
+    final cheques = await dbService.activity.cheques();
+    final recent = await dbService.activity.feed(limit: 5);
 
     return DashboardData(
       todaySales: today.total,
@@ -57,6 +64,14 @@ class DashboardRepository extends BaseRepository {
       topOwed: topOwed,
       latestSales: latestSales,
       latestBills: latestBills,
+      receivableTotal: receivable.total,
+      receivableCount: receivable.count,
+      todayIn: flow.moneyIn,
+      todayOut: flow.moneyOut,
+      cashBalance: money.cash,
+      bankBalance: money.bank,
+      cheques: cheques,
+      recent: recent,
     );
   }
 
@@ -94,6 +109,14 @@ class DashboardData {
     required this.latestSales,
     required this.latestBills,
     this.nextCheque,
+    this.receivableTotal = Money.zero,
+    this.receivableCount = 0,
+    this.todayIn = Money.zero,
+    this.todayOut = Money.zero,
+    this.cashBalance = Money.zero,
+    this.bankBalance = Money.zero,
+    this.cheques = const [],
+    this.recent = const [],
   });
 
   /// Sold today, credit included. [todayReceived] is what was actually taken —
@@ -117,6 +140,27 @@ class DashboardData {
   final List<Supplier> topOwed;
   final List<Sale> latestSales;
   final List<Purchase> latestBills;
+
+  /// What customers still owe, and how many of them.
+  final Money receivableTotal;
+  final int receivableCount;
+
+  /// Money through every account today. Transfers are not counted.
+  final Money todayIn;
+  final Money todayOut;
+
+  final Money cashBalance;
+  final Money bankBalance;
+
+  /// Every uncleared cheque in both directions, soonest first.
+  final List<ChequeItem> cheques;
+
+  /// The latest documents of any kind.
+  final List<ActivityItem> recent;
+
+  /// The cheques worth raising today: overdue, or due within the week.
+  List<ChequeItem> get chequeReminders =>
+      cheques.where((c) => c.needsAttention).toList();
 
   Money get todayOnCredit => todaySales - todayReceived;
 

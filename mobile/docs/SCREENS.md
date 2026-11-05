@@ -1,5 +1,9 @@
 # Screen build plan
 
+> The navigation and money screens changed in the UI upgrade. See
+> [UI_UPGRADE.md](UI_UPGRADE.md) for what is current; the phases below are the
+> original build history.
+
 The data layer, the sync engine and the widget kit are done. What is left is
 the app itself: twenty views, their controllers, the routes that reach them,
 and five queries the screens need that no repository answers yet.

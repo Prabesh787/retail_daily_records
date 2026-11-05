@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import '../../../data/enums/domain_tone.dart';
 import '../../../data/enums/sale_payment_mode.dart';
 import '../../../data/models/customer.dart';
+import '../../../data/models/ledger.dart';
 import '../../../data/models/purchase.dart';
 import '../../../data/models/sale.dart';
 import '../../../data/models/supplier.dart';
@@ -200,6 +201,8 @@ class CustomerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = customer.saleTotal;
     final count = customer.saleCount ?? 0;
+    final receivable = customer.receivable ?? Money.zero;
+    final owes = receivable.isPositive;
 
     return AppListRow(
       leading: AppAvatar(name: customer.name),
@@ -210,7 +213,10 @@ class CustomerRow extends StatelessWidget {
         // leaves them null, and a lone "0 sales" would read as a fact rather
         // than as a figure nobody fetched.
         if (total != null) ...[
-          RowAmount(total.display(decimals: false), tone: MoneyTone.inbound),
+          RowAmount(
+            owes ? receivable.display(decimals: false) : 'Settled',
+            tone: owes ? MoneyTone.inbound : MoneyTone.plain,
+          ),
           RowCaption('$count sale${count == 1 ? '' : 's'}'),
         ],
       ],
@@ -265,19 +271,18 @@ class PaymentRow extends StatelessWidget {
   }
 }
 
-/// A cheque in the register, with how long until it falls due.
+/// A cheque in the register, either direction, with how long until it falls
+/// due. Green is one the shop is waiting to collect; red is one it has to fund.
 class ChequeRow extends StatelessWidget {
-  const ChequeRow({super.key, required this.payment, this.onTap});
+  const ChequeRow({super.key, required this.cheque, this.onTap});
 
-  final SupplierPayment payment;
+  final ChequeItem cheque;
   final VoidCallback? onTap;
 
   /// The register exists to answer "what is about to hit the account", so the
   /// countdown is the point of the row and the date is the supporting detail.
-  String? get _dueLabel {
-    final due = payment.chequeDate;
-    if (due == null) return null;
-    final days = AppDateUtils.daysUntil(due);
+  String get _dueLabel {
+    final days = cheque.daysLeft;
     if (days < 0) return '${-days}d overdue';
     if (days == 0) return 'due today';
     return 'in ${days}d';
@@ -286,25 +291,36 @@ class ChequeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final name = payment.supplierName ?? 'Cheque';
-    final due = _dueLabel;
-    final chequeDate = payment.chequeDate;
+    final toCollect = cheque.direction == ChequeDirection.toCollect;
 
     return AppListRow(
-      leading: AppAvatar(name: name),
-      title: name,
+      leading: IconPlate(
+        icon: toCollect
+            ? Icons.south_west_rounded
+            : Icons.north_east_rounded,
+        color: toCollect ? palette.moneyIn : palette.moneyOut,
+        size: 36,
+      ),
+      title: cheque.partyName ?? 'Cheque',
       subtitle: [
-        'No. ${payment.chequeNo ?? '—'}',
-        if (chequeDate != null)
-          AppDateUtils.datePair(chequeDate, payment.chequeDateBs),
+        'No. ${cheque.chequeNo ?? '—'}',
+        AppDateUtils.formatDateShort(cheque.dueMs),
+        ?cheque.accountName,
       ].join(' · '),
       trailing: [
-        RowAmount(payment.amount.display(decimals: false)),
-        if (due != null)
+        RowAmount(
+          cheque.amount.display(decimals: false),
+          tone: toCollect ? MoneyTone.inbound : MoneyTone.outbound,
+        ),
+        if (cheque.isPending)
           Text(
-            due,
-            style: AppTextStyles.label.copyWith(color: palette.pending),
-          ),
+            _dueLabel,
+            style: AppTextStyles.label.copyWith(
+              color: cheque.daysLeft < 0 ? palette.moneyOut : palette.pending,
+            ),
+          )
+        else
+          PaymentStatusBadge(cheque.status),
       ],
       chevron: onTap != null,
       onTap: onTap,

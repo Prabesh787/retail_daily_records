@@ -1,12 +1,16 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../core/constants/db_constants.dart';
+import '../../models/account_entry.dart';
 import '../../models/attachment.dart';
 import '../../models/customer.dart';
+import '../../models/customer_payment.dart';
 import '../../models/fiscal_year.dart';
+import '../../models/money_account.dart';
 import '../../models/purchase.dart';
 import '../../models/sale.dart';
 import '../../models/sale_item.dart';
@@ -29,7 +33,7 @@ class DbHelper {
   static const String _dbName = 'billrecord.db';
 
   /// Bump when the schema changes and add a step to [_onUpgrade].
-  static const int _dbVersion = 3;
+  static const int _dbVersion = 4;
 
   Database? _db;
 
@@ -92,11 +96,14 @@ class DbHelper {
     FiscalYear.createTableSql,
     Supplier.createTableSql,
     Customer.createTableSql,
+    MoneyAccount.createTableSql,
     Purchase.createTableSql,
     SupplierPayment.createTableSql,
     Sale.createTableSql,
     SaleItem.createTableSql,
     SalePayment.createTableSql,
+    CustomerPayment.createTableSql,
+    AccountEntry.createTableSql,
     Attachment.createTableSql,
   ];
 
@@ -111,6 +118,8 @@ class DbHelper {
     Purchase.uniqueBillNoSql,
     SupplierPayment.uniqueVoucherSql,
     Sale.uniqueInvoiceSql,
+    CustomerPayment.uniqueVoucherSql,
+    ..._accountIndexes,
     'CREATE INDEX IF NOT EXISTS idx_fiscal_year_active ON ${DbTables.fiscalYear} (is_active)',
     'CREATE INDEX IF NOT EXISTS idx_fiscal_year_sync ON ${DbTables.fiscalYear} (sync_status)',
     'CREATE INDEX IF NOT EXISTS idx_supplier_name ON ${DbTables.supplier} (name)',
@@ -140,6 +149,18 @@ class DbHelper {
     Attachment.entityIndexSql,
   ];
 
+  /// The indexes that arrived with accounts, shared with the upgrade step so a
+  /// fresh install and an upgraded one end up with the same schema.
+  static final List<String> _accountIndexes = [
+    'CREATE INDEX IF NOT EXISTS idx_account_sync ON ${DbTables.account} (sync_status)',
+    'CREATE INDEX IF NOT EXISTS idx_customer_payment_customer ON ${DbTables.customerPayment} (customer_id)',
+    'CREATE INDEX IF NOT EXISTS idx_customer_payment_sale ON ${DbTables.customerPayment} (sale_id)',
+    'CREATE INDEX IF NOT EXISTS idx_customer_payment_date ON ${DbTables.customerPayment} (payment_date)',
+    'CREATE INDEX IF NOT EXISTS idx_customer_payment_sync ON ${DbTables.customerPayment} (sync_status)',
+    'CREATE INDEX IF NOT EXISTS idx_account_entry_date ON ${DbTables.accountEntry} (entry_date)',
+    'CREATE INDEX IF NOT EXISTS idx_account_entry_sync ON ${DbTables.accountEntry} (sync_status)',
+  ];
+
   Future<void> _onCreate(Database db, int version) async {
     final batch = db.batch();
     for (final sql in schemaStatements) {
@@ -147,6 +168,12 @@ class DbHelper {
     }
     await batch.commit(noResult: true);
   }
+
+  /// The upgrade path on its own, for pinning that a phone already in the field
+  /// survives it. Opening a real file is the only other way to reach it.
+  @visibleForTesting
+  Future<void> upgrade(Database db, int oldVersion, int newVersion) =>
+      _onUpgrade(db, oldVersion, newVersion);
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     // Migrations are additive and idempotent, one `if` per version step:
@@ -159,6 +186,17 @@ class DbHelper {
     if (oldVersion < 3) {
       await db.execute(Supplier.addIsTopSql);
     }
+    if (oldVersion < 4) {
+      await db.execute(MoneyAccount.createTableSql);
+      await db.execute(CustomerPayment.createTableSql);
+      await db.execute(AccountEntry.createTableSql);
+      await db.execute(SupplierPayment.addAccountIdSql);
+      await db.execute(SalePayment.addAccountIdSql);
+      await db.execute(CustomerPayment.uniqueVoucherSql);
+      for (final sql in _accountIndexes) {
+        await db.execute(sql);
+      }
+    }
   }
 
   /// Wipes user data but keeps the schema - used by Settings > Reset.
@@ -169,11 +207,14 @@ class DbHelper {
     final batch = db.batch();
     for (final table in [
       DbTables.attachment,
+      DbTables.accountEntry,
+      DbTables.customerPayment,
       DbTables.salePayment,
       DbTables.saleItem,
       DbTables.sale,
       DbTables.supplierPayment,
       DbTables.purchase,
+      DbTables.account,
       DbTables.customer,
       DbTables.supplier,
       DbTables.fiscalYear,

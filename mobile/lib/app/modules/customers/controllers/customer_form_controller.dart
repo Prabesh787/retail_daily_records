@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/domain/money.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/widgets/app_toast.dart';
 import '../../../core/widgets/confirm_dialog.dart';
@@ -36,6 +37,13 @@ class CustomerFormController extends GetxController {
   String get title => isEdit ? 'Edit customer' : 'New customer';
 
   Customer? get existing => _existing;
+
+  Money get owed => _existing?.receivable ?? Money.zero;
+
+  void receivePayment() => Get.toNamed<void>(
+    Routes.receiptForm,
+    arguments: {RouteArgs.presetCustomerId: _id},
+  );
 
   @override
   void onInit() {

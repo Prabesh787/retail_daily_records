@@ -8,22 +8,30 @@ import '../controllers/customers_controller.dart';
 
 /// The customer list.
 ///
-/// A pushed route rather than a tab: customers matter to a shop that invoices,
-/// and not at all to one selling over a counter for cash. It lives under More
-/// for the same reason the cheque register does.
+/// Half of the Parties tab. The headline figure is what customers owe, the
+/// number this list exists to chase.
 class CustomersView extends GetView<CustomersController> {
-  const CustomersView({super.key});
+  const CustomersView({super.key, this.switcher});
+
+  /// The Customers / Suppliers switch, when this is showing on the Parties tab.
+  final Widget? switcher;
 
   @override
   Widget build(BuildContext context) {
     return AppScreen(
-      title: 'Customers',
-      back: true,
+      title: switcher == null ? 'Customers' : 'Parties',
+      back: switcher == null,
       padded: false,
       onRefresh: controller.reload,
-      headerExtra: SearchField(
-        hint: 'Name or phone',
-        onChanged: (value) => controller.search.value = value,
+      headerExtraHeight: switcher == null ? 56 : 104,
+      headerExtra: Column(
+        children: [
+          if (switcher case final top?) ...[top, AppSizes.gapSm],
+          SearchField(
+            hint: 'Name or phone',
+            onChanged: (value) => controller.search.value = value,
+          ),
+        ],
       ),
       floatingAction: AppFab(
         label: 'New customer',
@@ -64,8 +72,9 @@ class CustomersView extends GetView<CustomersController> {
               else ...[
                 StatTile(
                   icon: Icons.people_rounded,
-                  label: 'SOLD TO THESE CUSTOMERS',
-                  value: controller.total.display(decimals: false),
+                  label: 'TO RECEIVE',
+                  tone: MoneyTone.inbound,
+                  value: controller.toReceive.display(decimals: false),
                   foot: '${controller.rows.length} '
                       'customer${controller.rows.length == 1 ? '' : 's'}',
                 ),

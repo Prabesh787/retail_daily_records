@@ -16,13 +16,17 @@
 /// **Money.** Fixed-precision strings, never numbers.
 library;
 
+import '../enums/account_type.dart';
 import '../enums/payment_status.dart';
 import '../enums/sale_payment_mode.dart';
 import '../enums/sale_type.dart';
 import '../enums/supplier_payment_mode.dart';
 import '../enums/sync_status.dart';
+import '../models/account_entry.dart';
 import '../models/customer.dart';
+import '../models/customer_payment.dart';
 import '../models/fiscal_year.dart';
+import '../models/money_account.dart';
 import '../models/purchase.dart';
 import '../models/sale.dart';
 import '../models/sale_item.dart';
@@ -112,6 +116,94 @@ class CustomerDto {
   }
 }
 
+class AccountDto {
+  AccountDto._();
+
+  static Map<String, dynamic> toWire(MoneyAccount account) => account.toJson();
+
+  static MoneyAccount fromWire(Map<String, dynamic> json) {
+    final now = _nowMs();
+    return MoneyAccount(
+      id: WireCodec.string(json['id']),
+      createdAt: WireCodec.millis(json['created_at'], fallback: now),
+      updatedAt: WireCodec.millis(json['updated_at'], fallback: now),
+      isDeleted: WireCodec.boolean(json['is_deleted']),
+      syncStatus: _fromServer,
+      deviceId: WireCodec.stringOrNull(json['device_id']),
+      name: WireCodec.string(json['name']),
+      accountType: AccountType.fromValue(
+        WireCodec.stringOrNull(json['accountType']),
+      ),
+      accountNo: WireCodec.stringOrNull(json['accountNo']),
+      openingBalance: WireCodec.money(json['openingBalance']),
+      isActive: WireCodec.boolean(json['isActive'], fallback: true),
+      remarks: WireCodec.stringOrNull(json['remarks']),
+    );
+  }
+}
+
+class CustomerPaymentDto {
+  CustomerPaymentDto._();
+
+  static Map<String, dynamic> toWire(CustomerPayment payment) =>
+      payment.toJson();
+
+  static CustomerPayment fromWire(Map<String, dynamic> json) {
+    final now = _nowMs();
+    return CustomerPayment(
+      id: WireCodec.string(json['id']),
+      createdAt: WireCodec.millis(json['created_at'], fallback: now),
+      updatedAt: WireCodec.millis(json['updated_at'], fallback: now),
+      isDeleted: WireCodec.boolean(json['is_deleted']),
+      syncStatus: _fromServer,
+      deviceId: WireCodec.stringOrNull(json['device_id']),
+      fiscalYearId: WireCodec.string(json['fiscalYearId']),
+      customerId: WireCodec.string(json['customerId']),
+      saleId: WireCodec.stringOrNull(json['saleId']),
+      voucherNo: WireCodec.stringOrNull(json['voucherNo']),
+      paymentDate: WireCodec.dateMs(json['paymentDate']) ?? 0,
+      paymentDateBs: WireCodec.stringOrNull(json['paymentDateBs']),
+      paymentMode: SupplierPaymentMode.fromValue(
+        WireCodec.stringOrNull(json['paymentMode']),
+      ),
+      amount: WireCodec.money(json['amount']),
+      accountId: WireCodec.stringOrNull(json['accountId']),
+      chequeNo: WireCodec.stringOrNull(json['chequeNo']),
+      chequeDate: WireCodec.dateMs(json['chequeDate']),
+      chequeDateBs: WireCodec.stringOrNull(json['chequeDateBs']),
+      referenceNo: WireCodec.stringOrNull(json['referenceNo']),
+      clearedDate: WireCodec.dateMs(json['clearedDate']),
+      status: PaymentStatus.fromValue(WireCodec.stringOrNull(json['status'])),
+      remarks: WireCodec.stringOrNull(json['remarks']),
+      createdById: WireCodec.stringOrNull(json['createdById']),
+    );
+  }
+}
+
+class AccountEntryDto {
+  AccountEntryDto._();
+
+  static Map<String, dynamic> toWire(AccountEntry entry) => entry.toJson();
+
+  static AccountEntry fromWire(Map<String, dynamic> json) {
+    final now = _nowMs();
+    return AccountEntry(
+      id: WireCodec.string(json['id']),
+      createdAt: WireCodec.millis(json['created_at'], fallback: now),
+      updatedAt: WireCodec.millis(json['updated_at'], fallback: now),
+      isDeleted: WireCodec.boolean(json['is_deleted']),
+      syncStatus: _fromServer,
+      deviceId: WireCodec.stringOrNull(json['device_id']),
+      entryDate: WireCodec.dateMs(json['entryDate']) ?? 0,
+      entryDateBs: WireCodec.stringOrNull(json['entryDateBs']),
+      fromAccountId: WireCodec.stringOrNull(json['fromAccountId']),
+      toAccountId: WireCodec.stringOrNull(json['toAccountId']),
+      amount: WireCodec.money(json['amount']),
+      description: WireCodec.stringOrNull(json['description']),
+    );
+  }
+}
+
 class PurchaseDto {
   PurchaseDto._();
 
@@ -168,6 +260,7 @@ class SupplierPaymentDto {
       chequeDate: WireCodec.dateMs(json['chequeDate']),
       chequeDateBs: WireCodec.stringOrNull(json['chequeDateBs']),
       referenceNo: WireCodec.stringOrNull(json['referenceNo']),
+      accountId: WireCodec.stringOrNull(json['accountId']),
       clearedDate: WireCodec.dateMs(json['clearedDate']),
       status: PaymentStatus.fromValue(WireCodec.stringOrNull(json['status'])),
       description: WireCodec.stringOrNull(json['description']),
@@ -270,5 +363,6 @@ class SalePaymentDto {
         clearedDate: WireCodec.dateMs(json['clearedDate']),
         status: PaymentStatus.fromValue(WireCodec.stringOrNull(json['status'])),
         remarks: WireCodec.stringOrNull(json['remarks']),
+        accountId: WireCodec.stringOrNull(json['accountId']),
       );
 }

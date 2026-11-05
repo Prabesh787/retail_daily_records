@@ -3,7 +3,10 @@ import 'package:get/get.dart';
 import '../data/providers/remote/api_client.dart';
 import '../data/providers/remote/rest_sync_api.dart';
 import '../data/providers/remote/sync_api.dart';
+import '../data/repositories/account_repository.dart';
+import '../data/repositories/activity_repository.dart';
 import '../data/repositories/attachment_repository.dart';
+import '../data/repositories/customer_payment_repository.dart';
 import '../data/repositories/customer_repository.dart';
 import '../data/repositories/dashboard_repository.dart';
 import '../data/repositories/fiscal_year_repository.dart';
@@ -35,6 +38,12 @@ class InitialBinding extends Bindings {
     );
     Get.lazyPut<SaleRepository>(SaleRepository.new, fenix: true);
     Get.lazyPut<AttachmentRepository>(AttachmentRepository.new, fenix: true);
+    Get.lazyPut<AccountRepository>(AccountRepository.new, fenix: true);
+    Get.lazyPut<CustomerPaymentRepository>(
+      CustomerPaymentRepository.new,
+      fenix: true,
+    );
+    Get.lazyPut<ActivityRepository>(ActivityRepository.new, fenix: true);
 
     // Composes the others rather than owning a table of its own; registered
     // here so the dashboard binding has nothing to build but its controller.

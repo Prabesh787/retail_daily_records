@@ -25,6 +25,7 @@ class AppScreen extends StatelessWidget {
     this.back = false,
     this.actions,
     this.headerExtra,
+    this.headerExtraHeight = 56,
     this.floatingAction,
     this.padded = true,
     this.scrollable = true,
@@ -47,6 +48,9 @@ class AppScreen extends StatelessWidget {
   /// filter. It does not scroll away, because a list you are filtering is a
   /// list you need the filter for at the bottom too.
   final Widget? headerExtra;
+
+  /// How tall [headerExtra] stands, for a screen that pins more than one row.
+  final double headerExtraHeight;
 
   final Widget? floatingAction;
 
@@ -136,7 +140,7 @@ class AppScreen extends StatelessWidget {
         bottom: headerExtra == null
             ? null
             : PreferredSize(
-                preferredSize: const Size.fromHeight(56),
+                preferredSize: Size.fromHeight(headerExtraHeight),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSizes.lg,

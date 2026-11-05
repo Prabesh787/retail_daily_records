@@ -95,6 +95,7 @@ class PaymentDetailView extends GetView<PaymentDetailController> {
                 payment.paymentDateBs,
               ),
             ),
+            DetailRow('Account', payment.accountName),
             DetailRow('Voucher', payment.voucherNo, mono: true),
             DetailRow('Cheque number', payment.chequeNo, mono: true),
             if (payment.chequeDate case final chequeDate?)
@@ -148,7 +149,7 @@ class _AmountCard extends StatelessWidget {
           Text(
             payment.amount.display(),
             style: AppTextStyles.display.copyWith(
-              color: cancelled ? palette.inkSubtle : palette.moneyIn,
+              color: cancelled ? palette.inkSubtle : palette.moneyOut,
               // Struck through, because the figure is still on the record but
               // no longer settles anything.
               decoration: cancelled ? TextDecoration.lineThrough : null,
@@ -196,7 +197,7 @@ class _Actions extends StatelessWidget {
               label: 'Mark as cleared',
               icon: Icons.check_circle_outline_rounded,
               isLoading: controller.isActing.value,
-              onPressed: controller.clear,
+              onPressed: () => controller.clear(context),
             ),
           if (controller.canClear && controller.canCancel) AppSizes.gapMd,
           if (controller.canCancel)

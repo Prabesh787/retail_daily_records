@@ -3,7 +3,9 @@ import 'package:sqflite/sqflite.dart';
 import '../../core/constants/db_constants.dart';
 import '../dto/retail_dto.dart';
 import '../enums/sync_status.dart';
+import '../providers/local/account_dao.dart';
 import '../providers/local/customer_dao.dart';
+import '../providers/local/customer_payment_dao.dart';
 import '../providers/local/fiscal_year_dao.dart';
 import '../providers/local/purchase_dao.dart';
 import '../providers/local/sale_dao.dart';
@@ -76,9 +78,12 @@ List<EntitySyncer> buildSyncers(Database db) => [
       FiscalYearSyncer(db),
       SupplierSyncer(db),
       CustomerSyncer(db),
+      AccountSyncer(db),
       PurchaseSyncer(db),
       SupplierPaymentSyncer(db),
       SaleSyncer(db),
+      CustomerPaymentSyncer(db),
+      AccountEntrySyncer(db),
     ];
 
 class FiscalYearSyncer extends EntitySyncer {
@@ -118,6 +123,45 @@ class CustomerSyncer extends EntitySyncer {
   @override
   Future<void> applyRemote(Map<String, dynamic> row) =>
       _dao.upsert(db, CustomerDto.fromWire(row));
+}
+
+class AccountSyncer extends EntitySyncer {
+  AccountSyncer(super.db) : _dao = AccountDao(db);
+
+  final AccountDao _dao;
+
+  @override
+  String get entity => DbTables.account;
+
+  @override
+  Future<void> applyRemote(Map<String, dynamic> row) =>
+      _dao.upsert(db, AccountDto.fromWire(row));
+}
+
+class CustomerPaymentSyncer extends EntitySyncer {
+  CustomerPaymentSyncer(super.db) : _dao = CustomerPaymentDao(db);
+
+  final CustomerPaymentDao _dao;
+
+  @override
+  String get entity => DbTables.customerPayment;
+
+  @override
+  Future<void> applyRemote(Map<String, dynamic> row) =>
+      _dao.upsert(db, CustomerPaymentDto.fromWire(row));
+}
+
+class AccountEntrySyncer extends EntitySyncer {
+  AccountEntrySyncer(super.db) : _dao = AccountDao(db);
+
+  final AccountDao _dao;
+
+  @override
+  String get entity => DbTables.accountEntry;
+
+  @override
+  Future<void> applyRemote(Map<String, dynamic> row) =>
+      _dao.upsertEntry(db, AccountEntryDto.fromWire(row));
 }
 
 class PurchaseSyncer extends EntitySyncer {

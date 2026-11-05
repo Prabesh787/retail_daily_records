@@ -69,7 +69,15 @@ class AppButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[Icon(icon, size: 18), AppSizes.gapSm],
-                Text(label),
+                // Flexible, so a long label in a narrow slot or at a large
+                // system font size shortens rather than overflowing.
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
     );

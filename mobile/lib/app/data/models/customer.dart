@@ -23,6 +23,7 @@ class Customer extends SyncableModel {
     super.deviceId,
     this.saleCount,
     this.saleTotal,
+    this.receivable,
   });
 
   final String name;
@@ -38,6 +39,10 @@ class Customer extends SyncableModel {
   /// claim the customer has never bought anything.
   final int? saleCount;
   final Money? saleTotal;
+
+  /// What they still owe: sold, less what was settled at the sale, less every
+  /// Payment In. Derived by the same query, and null on the same terms.
+  final Money? receivable;
 
   @override
   Map<String, dynamic> toMap() => {
@@ -78,6 +83,9 @@ class Customer extends SyncableModel {
         saleTotal: map.containsKey('sale_total')
             ? Money.fromColumn(map['sale_total'])
             : null,
+        receivable: map.containsKey('receivable')
+            ? Money.fromColumn(map['receivable'])
+            : null,
       );
 
   Customer copyWith({
@@ -92,6 +100,7 @@ class Customer extends SyncableModel {
     String? deviceId,
     int? saleCount,
     Money? saleTotal,
+    Money? receivable,
   }) =>
       Customer(
         id: id,
@@ -107,6 +116,7 @@ class Customer extends SyncableModel {
         deviceId: deviceId ?? this.deviceId,
         saleCount: saleCount ?? this.saleCount,
         saleTotal: saleTotal ?? this.saleTotal,
+        receivable: receivable ?? this.receivable,
       );
 
   static const String createTableSql = '''

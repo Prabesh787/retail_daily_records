@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/controllers/account_choice.dart';
 import '../../../core/domain/money.dart';
+import '../../../core/domain/pay_method.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/nepali_date.dart';
 import '../../../core/widgets/app_toast.dart';
+import '../../../data/enums/payment_status.dart';
 import '../../../data/enums/sale_payment_mode.dart';
 import '../../../data/enums/sale_type.dart';
 import '../../../data/models/customer.dart';
@@ -84,9 +87,13 @@ class SaleFormController extends GetxController {
   final TextEditingController remarks = TextEditingController();
   final TextEditingController saleDateBs = TextEditingController();
   final TextEditingController paidAmount = TextEditingController();
+  final TextEditingController chequeNo = TextEditingController();
+
+  final AccountChoice account = AccountChoice();
+  final RxInt chequeDate = AppDateUtils.startOfTodayMs().obs;
 
   final Rx<SaleType> saleType = SaleType.summary.obs;
-  final Rx<SalePaymentMode> paymentMode = SalePaymentMode.cash.obs;
+  final Rx<PayMethod> method = PayMethod.cash.obs;
   final Rxn<Customer> customer = Rxn<Customer>();
   final RxInt saleDate = AppDateUtils.startOfTodayMs().obs;
   final RxBool isSaving = false.obs;
@@ -104,7 +111,7 @@ class SaleFormController extends GetxController {
   bool _bsEdited = false;
 
   bool get isItemised => saleType.value.hasItems;
-  bool get isCredit => paymentMode.value == SalePaymentMode.credit;
+  bool get isCredit => method.value.isCredit;
 
   @override
   void onInit() {
@@ -197,15 +204,19 @@ class SaleFormController extends GetxController {
     itemsRevision.value++;
   }
 
+  /// "Add items" and "Enter a total instead" on the form.
   void setSaleType(SaleType value) {
     saleType.value = value;
     itemsRevision.value++;
   }
 
-  void setPaymentMode(SalePaymentMode value) {
-    paymentMode.value = value;
+  void setMethod(PayMethod value) {
+    method.value = value;
+    if (value.needsAccount) account.preselectOnlyBank();
     itemsRevision.value++;
   }
+
+  void setChequeDate(int ms) => chequeDate.value = ms;
 
   void setDate(int ms) {
     saleDate.value = ms;
@@ -229,10 +240,13 @@ class SaleFormController extends GetxController {
 
     // A credit sale with nobody to chase is not a record, it is a hole. Every
     // other mode is a counter sale where the customer is genuinely optional.
-    if (isCredit && customer.value == null) {
+    //
+    // The same goes for a part payment: whatever is left over is credit too.
+    if ((isCredit || dueNow.isPositive) && customer.value == null) {
       customerError.value = 'A credit sale needs a customer to chase';
       return;
     }
+    if (method.value.needsAccount && !account.validate()) return;
 
     final lines = items.where((d) => d.isValid).toList();
     if (isItemised && lines.isEmpty) {
@@ -320,8 +334,16 @@ class SaleFormController extends GetxController {
           id: '',
           saleId: '',
           createdAt: 0,
-          paymentMode: paymentMode.value,
+          paymentMode: method.value.saleMode,
           amount: paidNow,
+          accountId: method.value.needsAccount ? account.id : null,
+          chequeNo: method.value.isCheque ? _trimmed(chequeNo) : null,
+          chequeDate: method.value.isCheque ? chequeDate.value : null,
+          // A cheque in hand is not money in the bank. It clears from the
+          // register, which is when it reaches an account.
+          status: method.value.isCheque
+              ? PaymentStatus.issued
+              : PaymentStatus.cleared,
         ),
       // A part-paid counter sale: the rest is credit, and saying so here keeps
       // the payment lines adding up to the sale total.
@@ -354,6 +376,7 @@ class SaleFormController extends GetxController {
       remarks,
       saleDateBs,
       paidAmount,
+      chequeNo,
     ]) {
       field.dispose();
     }

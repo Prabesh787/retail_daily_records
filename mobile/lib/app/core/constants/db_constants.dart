@@ -13,6 +13,9 @@ class DbTables {
   static const String purchase = 'purchases';
   static const String supplierPayment = 'supplier_payments';
   static const String sale = 'sales';
+  static const String account = 'accounts';
+  static const String customerPayment = 'customer_payments';
+  static const String accountEntry = 'account_entries';
 
   /// Children that travel inside their parent's payload rather than syncing on
   /// their own — a sale header that arrived without its lines would be an
@@ -36,9 +39,12 @@ class DbTables {
     fiscalYear,
     supplier,
     customer,
+    account,
     purchase,
     supplierPayment,
     sale,
+    customerPayment,
+    accountEntry,
   ];
 }
 

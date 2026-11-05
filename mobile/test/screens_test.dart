@@ -15,7 +15,16 @@ import 'package:billrecord/app/data/repositories/purchase_repository.dart';
 import 'package:billrecord/app/data/repositories/sale_repository.dart';
 import 'package:billrecord/app/data/repositories/supplier_payment_repository.dart';
 import 'package:billrecord/app/data/repositories/supplier_repository.dart';
+import 'package:billrecord/app/modules/accounts/controllers/accounts_controller.dart';
+import 'package:billrecord/app/modules/accounts/views/accounts_view.dart';
+import 'package:billrecord/app/modules/activity/controllers/activity_controller.dart';
+import 'package:billrecord/app/modules/activity/views/activity_view.dart';
 import 'package:billrecord/app/modules/customers/bindings/customers_binding.dart';
+import 'package:billrecord/app/modules/customers/controllers/customers_controller.dart';
+import 'package:billrecord/app/modules/home/controllers/home_controller.dart';
+import 'package:billrecord/app/modules/parties/controllers/parties_controller.dart';
+import 'package:billrecord/app/modules/parties/views/parties_view.dart';
+import 'package:billrecord/app/modules/sales/views/quick_sale_view.dart';
 import 'package:billrecord/app/modules/dashboard/bindings/dashboard_binding.dart';
 import 'package:billrecord/app/modules/dashboard/views/dashboard_view.dart';
 import 'package:billrecord/app/modules/customers/views/customer_form_view.dart';
@@ -26,6 +35,7 @@ import 'package:billrecord/app/modules/payments/bindings/payments_binding.dart';
 import 'package:billrecord/app/modules/payments/views/cheque_register_view.dart';
 import 'package:billrecord/app/modules/payments/views/payment_detail_view.dart';
 import 'package:billrecord/app/modules/payments/views/payment_form_view.dart';
+import 'package:billrecord/app/modules/payments/views/receipt_form_view.dart';
 import 'package:billrecord/app/modules/purchases/bindings/purchases_binding.dart';
 import 'package:billrecord/app/modules/purchases/controllers/purchases_controller.dart';
 import 'package:billrecord/app/modules/purchases/views/purchase_detail_view.dart';
@@ -327,6 +337,17 @@ void main() {
       expect(find.text('Nothing outstanding'), findsOneWidget);
     });
 
+    testWidgets('Payment In form renders in its own right', (tester) async {
+      await pumpScreen(
+        tester,
+        const ReceiptFormView(),
+        binding: ReceiptFormBinding(),
+      );
+
+      expect(find.text('Payment In'), findsOneWidget);
+      expect(find.text('Money coming in'), findsOneWidget);
+    });
+
     testWidgets('cheque register buckets an issued cheque', (tester) async {
       final year = await seed(tester, seedYear);
       final supplier = await seed(tester, seedSupplier);
@@ -386,7 +407,9 @@ void main() {
       );
 
       expect(find.text('Save sale'), findsOneWidget);
-      expect(find.text('Total'), findsWidgets);
+      expect(find.text('Total amount'), findsOneWidget);
+      // A cash sale asks for nothing beyond the amount.
+      expect(find.text('Customer (optional)'), findsOneWidget);
     });
 
     testWidgets('form switches to the itemised shape', (tester) async {
@@ -396,7 +419,7 @@ void main() {
         binding: SaleFormBinding(),
       );
 
-      await tester.tap(find.text('Itemised'));
+      await tester.tap(find.text('Add items'));
       await settle(tester);
 
       expect(find.text('Add line'), findsOneWidget);
@@ -459,7 +482,8 @@ void main() {
         binding: DashboardBinding(),
       );
 
-      expect(find.text('SALES TODAY'), findsOneWidget);
+      expect(find.text('To receive'), findsOneWidget);
+      expect(find.text('Quick Sale'), findsWidgets);
       // A fresh shop is a different thing from a quiet day, and says so.
       expect(find.text('Nothing recorded yet'), findsOneWidget);
     });
@@ -477,13 +501,11 @@ void main() {
         binding: DashboardBinding(),
       );
 
-      expect(find.text('PAYABLE TO SUPPLIERS'), findsOneWidget);
-      expect(find.text('CHEQUES NOT CLEARED'), findsOneWidget);
-      expect(find.text('OWED THE MOST'), findsOneWidget);
-      expect(find.text('LATEST SALES'), findsOneWidget);
-      expect(find.text('LATEST BILLS'), findsOneWidget);
-      // The cheque is dated three days out, so the alert names the wait.
-      expect(find.textContaining('Next cheque in 3 days'), findsOneWidget);
+      expect(find.text('To pay'), findsOneWidget);
+      expect(find.text('Cash in hand'), findsOneWidget);
+      expect(find.text('RECENT'), findsOneWidget);
+      // The cheque is dated three days out, so it is on this week's reminder.
+      expect(find.text('1 cheque this week'), findsOneWidget);
       expect(find.text('Nothing recorded yet'), findsNothing);
     });
   });
@@ -559,12 +581,121 @@ void main() {
         }),
       );
 
-      expect(find.text('Cheque register'), findsOneWidget);
-      expect(find.text('Customers'), findsOneWidget);
+      expect(find.text('Cheques'), findsOneWidget);
+      expect(find.text('Day book'), findsOneWidget);
       expect(find.text('Fiscal years'), findsOneWidget);
       expect(find.text('Shop details'), findsOneWidget);
       expect(find.text('System'), findsOneWidget);
       expect(find.text('Sign out'), findsOneWidget);
+    });
+  });
+
+  // ---- Upgrade screens ----------------------------------------------------
+
+  group('quick sale', () {
+    testWidgets('keys an amount and records it as cash', (tester) async {
+      await seed(tester, seedYear);
+
+      await pumpScreen(
+        tester,
+        const QuickSaleView(),
+        binding: QuickSaleBinding(),
+      );
+
+      for (final key in ['1', '2', '0', '0']) {
+        await tester.tap(find.text(key));
+        await settle(tester);
+      }
+      expect(find.text('Rs 1,200.00'), findsOneWidget);
+
+      await tester.tap(find.text('Record sale'));
+      await settle(tester);
+
+      final sales = await seed(tester, () => Get.find<SaleRepository>().list());
+      expect(sales, hasLength(1));
+      expect(sales.first.totalAmount, Money.fromRupees(1200));
+      // Ready for the next one.
+      expect(find.text('Rs 0.00'), findsOneWidget);
+
+      // Lets the confirmation toast finish, or its ticker outlives the test.
+      await tester.pump(const Duration(seconds: 5));
+      await settle(tester);
+    });
+
+    testWidgets('a credit sale asks for the customer first', (tester) async {
+      await seed(tester, seedYear);
+
+      await pumpScreen(
+        tester,
+        const QuickSaleView(),
+        binding: QuickSaleBinding(),
+      );
+
+      await tester.tap(find.text('5'));
+      await settle(tester);
+      await tester.tap(find.text('Credit'));
+      await settle(tester);
+      await tester.tap(find.text('Record credit sale'));
+      await settle(tester);
+
+      expect(find.text('A credit sale needs a customer'), findsOneWidget);
+      final sales = await seed(tester, () => Get.find<SaleRepository>().list());
+      expect(sales, isEmpty);
+    });
+  });
+
+  group('new tabs', () {
+    BindingsBuilder<void> tabs() => BindingsBuilder(() {
+      Get.put(HomeController());
+      Get.put(ActivityController());
+      Get.put(AccountsController());
+      Get.put(PartiesController());
+      Get.put(CustomersController());
+    });
+
+    testWidgets('transactions lists every kind together', (tester) async {
+      final year = await seed(tester, seedYear);
+      final supplier = await seed(tester, seedSupplier);
+      await seed(tester, () => seedSale(year.id));
+      await seed(tester, () => seedBill(year.id, supplier.id));
+      await seed(tester, () => seedCheque(year.id, supplier.id));
+
+      await pumpScreen(tester, const ActivityView(), binding: tabs());
+
+      expect(find.text('ABC Textiles'), findsNWidgets(2));
+      expect(find.text('Cheque pending'), findsOneWidget);
+    });
+
+    testWidgets('transactions renders empty', (tester) async {
+      await pumpScreen(tester, const ActivityView(), binding: tabs());
+
+      expect(find.text('No transactions yet'), findsOneWidget);
+    });
+
+    testWidgets('accounts sets up the cash box on first open', (tester) async {
+      await pumpScreen(tester, const AccountsView(), binding: tabs());
+
+      expect(find.text('Cash'), findsOneWidget);
+      expect(find.text('TOTAL BALANCE'), findsOneWidget);
+    });
+
+    testWidgets('parties switches between its two halves', (tester) async {
+      await pumpScreen(
+        tester,
+        const PartiesView(),
+        binding: BindingsBuilder(() {
+          Get.put(PartiesController());
+          Get.put(CustomersController());
+          Get.put(SuppliersController());
+        }),
+      );
+
+      expect(find.text('No customers yet'), findsOneWidget);
+
+      await tester.tap(find.text('Suppliers').first);
+      await settle(tester);
+
+      expect(Get.find<PartiesController>().tab.value, PartyTab.suppliers);
     });
   });
 
